@@ -26,6 +26,16 @@ const DEFAULT_EMPLOYEE_NAMES = [
   'Scarleth',
 ];
 
+const CONSECUTIVE_PAIRS = [
+  [0, 1], // Lun - Mar
+  [1, 2], // Mar - Mié
+  [2, 3], // Mié - Jue
+  [3, 4], // Jue - Vie
+  [4, 5], // Vie - Sáb
+  [5, 6], // Sáb - Dom
+  [6, 0], // Dom - Lun
+];
+
 /* ============================================
    MODULE: Toast Notifications
    ============================================ */
@@ -221,23 +231,35 @@ const Scheduler = {
     const offCount = Array(7).fill(0); // how many employees are off per day
 
     // ---- PHASE 1: Emp 1 (index 0) ONLY ----
-    // Key employee: works strictly Morning on 5 working days and takes off on the 2 days of lowest demand
-    const dayDemand = [];
-    for (let d = 0; d < 7; d++) {
-      dayDemand[d] = { day: d, total: demandM[d] + demandT[d], morning: demandM[d] };
+    // Key employee: works strictly Morning on 5 working days and takes off on the 2 consecutive days of lowest combined demand
+    const candidatePairs = [];
+    for (let p = 0; p < CONSECUTIVE_PAIRS.length; p++) {
+      const [d1, d2] = CONSECUTIVE_PAIRS[p];
+      let canWorkMornings = true;
+      for (let d = 0; d < 7; d++) {
+        if (d !== d1 && d !== d2 && demandM[d] < 1) {
+          canWorkMornings = false;
+          break;
+        }
+      }
+      const combinedDemand = (demandM[d1] + demandT[d1]) + (demandM[d2] + demandT[d2]);
+      const combinedMorning = demandM[d1] + demandM[d2];
+      const isWeekend = (p === 5 || p === 6) ? 1 : 0;
+      candidatePairs.push({ p, d1, d2, combinedDemand, combinedMorning, isWeekend, canWorkMornings });
     }
-    // Prioritize days with zero morning demand (so Emp 1 does not exceed 0 demand), then days with lowest total demand
-    dayDemand.sort((a, b) => {
-      if (a.morning === 0 && b.morning > 0) return -1;
-      if (b.morning === 0 && a.morning > 0) return 1;
-      return (a.total - b.total) || (a.morning - b.morning);
-    });
-    const offDaysEmp1 = [dayDemand[0].day, dayDemand[1].day];
 
-    for (const d of offDaysEmp1) {
-      matrix[0][d] = 'L';
-      offCount[d] += 1;
-    }
+    candidatePairs.sort((a, b) => {
+      if (a.canWorkMornings !== b.canWorkMornings) return b.canWorkMornings ? 1 : -1;
+      if (a.combinedDemand !== b.combinedDemand) return a.combinedDemand - b.combinedDemand;
+      if (a.combinedMorning !== b.combinedMorning) return a.combinedMorning - b.combinedMorning;
+      return b.isWeekend - a.isWeekend;
+    });
+
+    const bestEmp1Pair = CONSECUTIVE_PAIRS[candidatePairs[0].p];
+    matrix[0][bestEmp1Pair[0]] = 'L';
+    matrix[0][bestEmp1Pair[1]] = 'L';
+    offCount[bestEmp1Pair[0]] += 1;
+    offCount[bestEmp1Pair[1]] += 1;
 
     // Emp 1 works Morning on their 5 working days
     for (let d = 0; d < 7; d++) {
@@ -246,52 +268,33 @@ const Scheduler = {
       }
     }
 
-    // ---- PHASE 2: Distribute off days for Emp 2..N (indices 1 to n - 1) ----
-    const maxRemainingOffPerDay = [];
+    // ---- PHASE 2: Distribute CONSECUTIVE off days for Emp 2..N (indices 1 to n - 1) ----
+    const targetOff = [];
     for (let d = 0; d < 7; d++) {
       const maxTotalOff = Math.max(0, n - (demandM[d] + demandT[d]));
-      maxRemainingOffPerDay[d] = Math.max(0, maxTotalOff - offCount[d]);
+      targetOff[d] = Math.max(0, maxTotalOff - offCount[d]);
     }
 
-    // Assign off days to remaining employees (1 to n - 1)
-    const offAssigned = Array(7).fill(0);
+    const pairCounts = this._solveConsecutiveOffCounts(n - 1, targetOff);
+
+    const pairsToAssign = [];
+    for (let p = 0; p < CONSECUTIVE_PAIRS.length; p++) {
+      const count = pairCounts[p] || 0;
+      for (let c = 0; c < count; c++) {
+        pairsToAssign.push(CONSECUTIVE_PAIRS[p]);
+      }
+    }
+
+    while (pairsToAssign.length < n - 1) {
+      pairsToAssign.push(CONSECUTIVE_PAIRS[0]);
+    }
 
     for (let emp = 1; emp < n; emp++) {
-      let daysOff = 0;
-      const candidates = [];
-      for (let d = 0; d < 7; d++) {
-        const remaining = maxRemainingOffPerDay[d] - offAssigned[d];
-        if (remaining > 0) {
-          candidates.push({ day: d, remaining });
-        }
-      }
-      candidates.sort((a, b) => b.remaining - a.remaining);
-
-      for (const c of candidates) {
-        if (daysOff >= DAYS_OFF_PER_EMPLOYEE) break;
-        matrix[emp][c.day] = 'L';
-        offAssigned[c.day]++;
-        offCount[c.day]++;
-        daysOff++;
-      }
-
-      if (daysOff < DAYS_OFF_PER_EMPLOYEE) {
-        // Fallback if demand distribution is tight
-        for (let d = 0; d < 7 && daysOff < DAYS_OFF_PER_EMPLOYEE; d++) {
-          if (matrix[emp][d] === null) {
-            matrix[emp][d] = 'L';
-            offCount[d]++;
-            daysOff++;
-          }
-        }
-      }
-
-      if (daysOff < DAYS_OFF_PER_EMPLOYEE) {
-        return {
-          success: false,
-          error: `No se pueden asignar ${DAYS_OFF_PER_EMPLOYEE} días libres al empleado ${employees[emp]}. La demanda es demasiado alta.`,
-        };
-      }
+      const pair = pairsToAssign[emp - 1];
+      matrix[emp][pair[0]] = 'L';
+      matrix[emp][pair[1]] = 'L';
+      offCount[pair[0]] += 1;
+      offCount[pair[1]] += 1;
     }
 
     // ---- PHASE 3: Assign M/T for employees 1..n-1 with guaranteed >= 1 Morning ----
@@ -491,6 +494,76 @@ const Scheduler = {
 
       if (!improved) break;
     }
+  },
+
+  _solveConsecutiveOffCounts(numEmpsToAssign, targetOff) {
+    let bestCounts = null;
+    let bestScore = Infinity;
+
+    function score(counts) {
+      let s = 0;
+      for (let d = 0; d < 7; d++) {
+        const actual = counts[d] + counts[(d + 6) % 7];
+        const diff = actual - targetOff[d];
+        if (diff > 0) s += diff * 1000 + diff * diff * 100;
+        else s += Math.abs(diff) * 10;
+      }
+      return s;
+    }
+
+    const counts = Array(7).fill(0);
+
+    function search(idx, currentSum) {
+      if (idx === 6) {
+        counts[6] = numEmpsToAssign - currentSum;
+        const sc = score(counts);
+        if (sc < bestScore) {
+          bestScore = sc;
+          bestCounts = [...counts];
+        }
+        return;
+      }
+
+      const remaining = numEmpsToAssign - currentSum;
+      const maxVal = Math.min(remaining, (targetOff[idx] || 0) + 3);
+      for (let v = 0; v <= maxVal; v++) {
+        counts[idx] = v;
+        search(idx + 1, currentSum + v);
+        if (bestScore === 0) return;
+      }
+    }
+
+    search(0, 0);
+
+    if (!bestCounts || bestScore > 500) {
+      function searchBroader(idx, currentSum) {
+        if (idx === 6) {
+          counts[6] = numEmpsToAssign - currentSum;
+          const sc = score(counts);
+          if (sc < bestScore) {
+            bestScore = sc;
+            bestCounts = [...counts];
+          }
+          return;
+        }
+        const remaining = numEmpsToAssign - currentSum;
+        for (let v = 0; v <= remaining; v++) {
+          counts[idx] = v;
+          searchBroader(idx + 1, currentSum + v);
+          if (bestScore === 0) return;
+        }
+      }
+      searchBroader(0, 0);
+    }
+
+    if (!bestCounts) {
+      bestCounts = Array(7).fill(0);
+      for (let i = 0; i < numEmpsToAssign; i++) {
+        bestCounts[i % 7]++;
+      }
+    }
+
+    return bestCounts;
   },
 };
 
@@ -972,6 +1045,7 @@ const Auditor = {
 
     let totalDemandMismatches = 0;
     let totalOffdayMismatches = 0;
+    let totalConsecutiveMismatches = 0;
     let totalFatigueIssues = 0;
     let totalMorningIssues = 0;
 
@@ -1006,26 +1080,36 @@ const Auditor = {
       let countL = 0;
       let countM = 0;
       let countT = 0;
+      const offDays = [];
       for (let d = 0; d < 7; d++) {
         const s = matrix[e] ? matrix[e][d] : 'L';
-        if (s === 'L') countL++;
-        else if (s === 'M') countM++;
+        if (s === 'L') {
+          countL++;
+          offDays.push(d);
+        } else if (s === 'M') countM++;
         else if (s === 'T') countT++;
       }
       const isKey = (e === 0);
-      empStats.push({ name: employees[e], m: countM, t: countT, l: countL, hours: (countM + countT) * 8, isKey });
-
       const is2Off = countL === 2;
+      const isConsecutive = is2Off && ((offDays[1] - offDays[0] === 1) || (offDays[0] === 0 && offDays[1] === 6));
+
+      empStats.push({ name: employees[e], m: countM, t: countT, l: countL, hours: (countM + countT) * 8, isKey, isConsecutive });
+
       if (!is2Off) totalOffdayMismatches++;
+      if (is2Off && !isConsecutive) totalConsecutiveMismatches++;
 
       // Rule checks: Emp 1 must only work morning; everyone needs >= 1 morning
       if (isKey && countT > 0) totalMorningIssues++;
       if (countM === 0) totalMorningIssues++;
 
       const tag = document.createElement('span');
-      let statusClass = is2Off ? 'ok' : (countL < 2 ? 'err' : 'warn');
+      let statusClass = (is2Off && isConsecutive) ? 'ok' : (!is2Off ? (countL < 2 ? 'err' : 'warn') : 'warn');
       tag.className = `audit-tag audit-tag--${statusClass}`;
-      tag.textContent = `${employees[e]}: ${countL}/2 Libres`;
+      let consecNotice = '';
+      if (is2Off && !isConsecutive) {
+        consecNotice = ' ⚠️ No seguidos';
+      }
+      tag.textContent = `${employees[e]}: ${countL}/2 Libres${consecNotice}`;
       offdaysSummary.appendChild(tag);
     }
 
@@ -1057,14 +1141,15 @@ const Auditor = {
     }
 
     // 4. Global Badge
-    if (totalDemandMismatches === 0 && totalOffdayMismatches === 0 && totalFatigueIssues === 0 && totalMorningIssues === 0) {
+    if (totalDemandMismatches === 0 && totalOffdayMismatches === 0 && totalConsecutiveMismatches === 0 && totalFatigueIssues === 0 && totalMorningIssues === 0) {
       globalBadge.className = 'badge badge--success';
       globalBadge.textContent = 'Balance Óptimo ✅';
-    } else if (totalDemandMismatches > 0 || totalOffdayMismatches > 0 || totalMorningIssues > 0) {
+    } else if (totalDemandMismatches > 0 || totalOffdayMismatches > 0 || totalConsecutiveMismatches > 0 || totalMorningIssues > 0) {
       globalBadge.className = 'badge badge--danger';
       const issues = [];
       if (totalDemandMismatches > 0) issues.push('Demanda');
       if (totalOffdayMismatches > 0) issues.push('Días libres');
+      if (totalConsecutiveMismatches > 0) issues.push('Libres no seguidos');
       if (totalMorningIssues > 0) issues.push('Regla de mañanas');
       globalBadge.textContent = `Ajuste requerido: ${issues.join(' · ')} ⚠️`;
     } else {
@@ -1078,6 +1163,7 @@ const Auditor = {
       empStats.forEach(stat => {
         const mNotice = stat.m === 0 ? ' <span title="Se requiere al menos 1 turno de mañana" style="color:var(--color-danger); font-size:0.75rem;">⚠️ Mín. 1 M</span>' : '';
         const tNotice = (stat.isKey && stat.t > 0) ? ' <span title="El empleado clave debe ser solo mañana" style="color:var(--color-danger); font-size:0.75rem;">⚠️ Solo M</span>' : '';
+        const consecNotice = (!stat.isConsecutive && stat.l === 2) ? ' <span title="Los 2 días libres deben ser seguidos" style="color:var(--color-warning); font-size:0.75rem;">⚠️ No seguidos</span>' : '';
         const nameText = stat.isKey
           ? `${Renderer._escapeHtml(stat.name)} <span style="font-size:0.75rem; color:var(--text-muted); font-weight:normal;">(Clave)</span>`
           : Renderer._escapeHtml(stat.name);
@@ -1085,7 +1171,7 @@ const Auditor = {
           <td style="font-weight:600; text-align:left;">${nameText}</td>
           <td><span style="color:var(--color-morning); font-weight:700;">${stat.m}</span>${mNotice}</td>
           <td><span style="color:var(--color-afternoon); font-weight:700;">${stat.t}</span>${tNotice}</td>
-          <td><span style="color:var(--color-free); font-weight:700;">${stat.l}</span></td>
+          <td><span style="color:var(--color-free); font-weight:700;">${stat.l}</span>${consecNotice}</td>
           <td><strong>${stat.hours} h</strong></td>
         </tr>`;
       });
