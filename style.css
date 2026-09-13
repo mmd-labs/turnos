@@ -429,11 +429,59 @@ input::placeholder, textarea::placeholder {
 }
 
 /* ============================================
-   DEMAND TABLE
+   DEMAND TABLE & MULTI-WEEK NAVIGATION
    ============================================ */
+.demand-header-flex {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.demand-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.demand-weeks-nav {
+  margin-top: 0.25rem;
+  margin-bottom: 0.65rem;
+}
+
+.demand-week-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-primary);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-primary);
+  padding: 0.35rem 0.75rem;
+  border-radius: 4px;
+  margin-bottom: 0.75rem;
+}
+
 .table-responsive {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+  position: relative;
+  border-radius: var(--radius);
+}
+
+.table-responsive::-webkit-scrollbar {
+  height: 6px;
+}
+
+.table-responsive::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
 }
 
 .demand-table {
@@ -447,6 +495,19 @@ input::placeholder, textarea::placeholder {
   padding: 0.625rem 0.75rem;
   text-align: center;
   border: 1px solid var(--color-border);
+}
+
+.demand-table th:first-child,
+.demand-table td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  box-shadow: 2px 0 6px rgba(0, 0, 0, 0.08);
+}
+
+.demand-table thead th:first-child {
+  z-index: 4;
+  background: var(--color-surface);
 }
 
 .demand-table th {
@@ -523,6 +584,19 @@ input::placeholder, textarea::placeholder {
 .schedule-table th,
 .schedule-table td {
   border: 1px solid var(--color-border);
+}
+
+.schedule-table th:first-child,
+.schedule-table td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  box-shadow: 2px 0 6px rgba(0, 0, 0, 0.08);
+}
+
+.schedule-table thead th:first-child {
+  z-index: 4;
+  background: var(--color-surface);
 }
 
 .schedule-table thead th {
@@ -1139,6 +1213,19 @@ input::placeholder, textarea::placeholder {
   text-align: center;
 }
 
+.equity-table th:first-child,
+.equity-table td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background-color: var(--color-surface);
+  box-shadow: 2px 0 6px rgba(0, 0, 0, 0.08);
+}
+
+.equity-table thead th:first-child {
+  z-index: 4;
+}
+
 .equity-table th {
   background: var(--color-surface);
   font-weight: 700;
@@ -1499,57 +1586,259 @@ input::placeholder, textarea::placeholder {
 }
 
 /* ============================================
-   RESPONSIVE
+   RESPONSIVE DESIGN (DESKTOP, TABLET, MOBILE)
    ============================================ */
-@media (max-width: 768px) {
-  .panel-section {
-    padding: 1.25rem 1rem;
-  }
 
-  .section-title {
-    font-size: 1.25rem;
-  }
-
-  .schedule-header {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .schedule-actions {
-    width: 100%;
-    flex-wrap: wrap;
-  }
-
-  .schedule-actions .btn {
-    flex: 1 1 calc(50% - 0.5rem);
-  }
-
-  .employee-grid {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .config-row .form-group {
+/* Large Tablets & Small Desktops (<= 1024px) */
+@media (max-width: 1024px) {
+  .section-container {
     max-width: 100%;
   }
 
+  .config-row--main {
+    gap: 1rem;
+  }
+
+  .config-row--main .form-group {
+    flex: 1 1 calc(33.333% - 1rem);
+    min-width: 190px;
+  }
+
+  .employee-grid {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  }
+
+  .audit-grid {
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  }
+}
+
+/* Tablets & Mobile Landscape (<= 768px) */
+@media (max-width: 768px) {
+  /* Layout & Spacing */
+  .panel-section {
+    padding: 1.25rem 0.85rem;
+  }
+
+  .section-title {
+    font-size: 1.3rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .app-header {
+    padding: 0.6rem 1rem;
+  }
+
+  .brand-title {
+    font-size: 1.15rem;
+  }
+
+  .brand-icon {
+    width: 28px;
+    height: 28px;
+  }
+
+  /* Main Form Controls */
+  .config-row--main {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.85rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .config-row--main .form-group {
+    max-width: 100%;
+    min-width: 100%;
+    width: 100%;
+  }
+
+  /* Prevent automatic zoom-in on touch focus in iOS Safari */
+  input[type="text"],
+  input[type="date"],
+  input[type="number"],
+  select,
+  .form-select,
+  .demand-input,
+  .emp-name-input,
+  .emp-pattern-select {
+    font-size: 16px !important;
+  }
+
+  /* Touch-friendly input heights */
+  .form-select,
+  .form-group input {
+    min-height: 44px;
+  }
+
+  /* Horizontal swipeable navigation pills */
+  .generated-weeks-nav {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x mandatory;
+    padding: 0.25rem 0.1rem 0.65rem;
+    scrollbar-width: thin;
+  }
+
+  .week-pill {
+    flex-shrink: 0;
+    scroll-snap-align: start;
+    font-size: 0.8rem;
+    padding: 0.45rem 0.85rem;
+    white-space: nowrap;
+  }
+
+  /* Demand Header & Actions */
+  .demand-header-flex {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.65rem;
+  }
+
+  .demand-actions {
+    width: 100%;
+  }
+
+  .demand-actions .btn {
+    width: 100%;
+    justify-content: center;
+    min-height: 42px;
+  }
+
+  .demand-input {
+    width: 52px;
+    height: 42px;
+  }
+
+  /* Primary Action Button */
+  #btn-generate {
+    width: 100%;
+    min-height: 48px;
+    font-size: 1.05rem;
+    justify-content: center;
+  }
+
+  /* Employee Cards Grid */
+  .employee-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+  }
+
+  /* Schedule Header & Action Buttons */
+  .schedule-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .schedule-actions {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.5rem;
+    width: 100%;
+  }
+
+  .schedule-actions .btn {
+    width: 100%;
+    justify-content: center;
+    font-size: 0.8125rem;
+    padding: 0.6rem 0.65rem;
+    min-height: 42px;
+  }
+
+  /* Audit Grid */
+  .audit-panel {
+    padding: 1rem 0.85rem;
+  }
+
+  .audit-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Modals */
+  .modal-backdrop {
+    padding: 0.5rem;
+  }
+
+  .modal-card {
+    max-width: 100%;
+    width: 100%;
+    max-height: 94vh;
+    border-radius: var(--radius);
+  }
+
+  .modal-body--scrollable {
+    padding: 1rem;
+    max-height: calc(94vh - 120px);
+  }
+
+  .help-features-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .help-step-item {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .individual-schedule-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* Toasts */
   .toast-container {
-    bottom: 1rem;
-    right: 1rem;
-    left: 1rem;
+    bottom: 0.85rem;
+    right: 0.85rem;
+    left: 0.85rem;
   }
 
   .toast {
     max-width: 100%;
+    font-size: 0.85rem;
   }
 }
 
+/* Smartphone Portrait (<= 480px) */
 @media (max-width: 480px) {
-  .schedule-actions .btn {
-    flex: 1 1 100%;
+  .app-header {
+    padding: 0.5rem 0.75rem;
+  }
+
+  .brand-title {
+    font-size: 1.05rem;
   }
 
   .employee-grid {
     grid-template-columns: 1fr;
+  }
+
+  .schedule-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .schedule-actions .btn {
+    font-size: 0.875rem;
+    min-height: 44px;
+  }
+
+  .individual-schedule-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .schedule-table {
+    font-size: 0.8125rem;
+  }
+
+  .col-shift {
+    width: 95px;
+    min-width: 95px;
+    font-size: 0.75rem;
+  }
+
+  .row-label {
+    padding: 0.75rem 0.5rem;
+    font-size: 0.8125rem;
   }
 }
 

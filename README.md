@@ -24,6 +24,10 @@ Funciona íntegramente en el navegador (100% client-side), sin necesidad de base
   - Selector de horizonte de planificación: genera de 1 a 12 semanas (1, 2, 3, 4, 7, 8 o 12 semanas) en un solo clic.
   - Cada semana se calcula y almacena individualmente con sus fechas de calendario.
   - Barra interactiva de navegación con pestañas tipo *pill* para alternar instantáneamente entre todas las semanas generadas sin recargar.
+- **Matriz de Demanda Personalizable por Semana**:
+  - Cada semana a planificar puede tener su propia dotación de personal específica por turno y día (ideal para semanas con eventos especiales o picos de trabajo).
+  - Pestañas de selección rápida dentro del bloque de demanda para editar la matriz de cualquier semana individual.
+  - Botón `📋 Copiar a todas las semanas` para propagar los valores de una semana a todo el horizonte planificado en un solo clic.
 - **Alternancia Estricta de Turnos Semana a Semana**:
   - Los empleados 2 a N alternan de forma exacta entre dos modalidades de turno de semana a semana:
     - **Semana impar**: **3 turnos de Mañana** + **2 turnos de Tarde** (o viceversa).
@@ -31,8 +35,10 @@ Funciona íntegramente en el navegador (100% client-side), sin necesidad de base
   - **Empleado 1 (Mar)**: trabaja exclusivamente **5 turnos de Mañana y 0 de Tarde** todas las semanas.
   - El algoritmo asegura mediante holgura por prioridad y fases de reparación el cumplimiento del 100% de los turnos objetivo de cada empleado.
 - **Reglas y Restricciones Duras**:
-  - Empleado clave (Empleado 1 - Mar): trabaja exclusivamente en turno de **Mañana** en sus 5 días laborables (5M / 0T) y libra según su semana correspondiente del ciclo rotativo.
-  - Cada empleado disfruta estrictamente de **2 días libres semanales seguidos** (`L`).
+  - **Dotación Mínima**: Nunca puede haber menos de **2 empleados por turno** en ningún día de la semana.
+  - **Fines de Semana Reforzados**: Los **viernes, sábados y domingos** siempre cuentan obligatoriamente con **3 empleados por cada turno** (3 Mañanas + 3 Tardes = 6 trabajadores en activo y exactamente 2 descansando).
+  - **Empleado Clave (Empleado 1 - Mar)**: Trabaja exclusivamente en turno de **Mañana** en sus 5 días laborables (5M / 0T) y libra según su semana correspondiente del ciclo rotativo.
+  - **Días Libres Consecutivos**: Cada empleado disfruta estrictamente de **2 días libres semanales seguidos** (`L`).
   - **Mínimo 1 Mañana por Empleado**: Todos los empleados tienen garantizado al menos **1 turno de Mañana** a la semana.
 - **Optimización Ergonómica de Descanso**:
   - Reduce al mínimo las secuencias fatigosas de **Tarde seguida de Mañana** (`T -> M`).

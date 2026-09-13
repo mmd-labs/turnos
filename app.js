@@ -9,6 +9,8 @@ const STORAGE_KEYS = {
   GENERATED_WEEKS: 'turnos_generated_weeks',
   WEEKS_COUNT: 'turnos_weeks_count',
   CONFIG: 'turnos_config',
+  DEMANDS_BY_WEEK: 'turnos_demands_by_week',
+  DEMAND_WEEK_PREFIX: 'turnos_demand_',
   SCHEDULE: 'turnos_schedule',
   SCHEDULE_WEEK_PREFIX: 'turnos_schedule_',
   THEME: 'turnos_theme',
@@ -48,19 +50,22 @@ const DEFAULT_EMPLOYEE_PATTERNS = [
   3, // Lidia: Semana 3 (Miércoles - Jueves)
   4, // Melody: Semana 4 (Jueves - Viernes)
   5, // Ashley: Semana 5 (Viernes - Sábado)
-  6, // Idaira: Semana 6 (Sábado - Domingo)
+  3, // Idaira: Semana 3 (Miércoles - Jueves)
   7, // Scarleth: Semana 7 (Domingo - Lunes)
 ];
+
+const CYCLE_8 = [1, 2, 3, 3, 4, 5, 6, 7];
+const DEFAULT_CYCLE_POSITIONS = [6, 0, 1, 2, 4, 5, 3, 7];
 
 const DEFAULT_EMPLOYEE_SHIFT_MODES = [
   '5M0T', // Mar: fija solo mañanas
   '3M2T', // Clary: 3M/2T semana 1 -> 2M/3T semana 2
   '2M3T', // Estrella: 2M/3T semana 1 -> 3M/2T semana 2
-  '3M2T', // Lidia: 3M/2T semana 1 -> 2M/3T semana 2
+  '2M3T', // Lidia: 2M/3T semana 1 -> 3M/2T semana 2
   '2M3T', // Melody: 2M/3T semana 1 -> 3M/2T semana 2
-  '3M2T', // Ashley: 3M/2T semana 1 -> 2M/3T semana 2
-  '2M3T', // Idaira: 2M/3T semana 1 -> 3M/2T semana 2
-  '3M2T', // Scarleth: 3M/2T semana 1 -> 2M/3T semana 2
+  '2M3T', // Ashley: 2M/3T semana 1 -> 3M/2T semana 2
+  '3M2T', // Idaira: 3M/2T semana 1 -> 2M/3T semana 2
+  '2M3T', // Scarleth: 2M/3T semana 1 -> 3M/2T semana 2
 ];
 
 const CONSECUTIVE_PAIRS = [
@@ -175,6 +180,49 @@ const Storage = {
     }
   },
 
+  saveDemand(demand) {
+    const config = this.loadConfig() || {};
+    config.demand = demand;
+    this.saveConfig(config);
+  },
+
+  loadDemand() {
+    const config = this.loadConfig();
+    return (config && config.demand) ? config.demand : null;
+  },
+
+  saveDemandsByWeek(map) {
+    localStorage.setItem(STORAGE_KEYS.DEMANDS_BY_WEEK, JSON.stringify(map));
+  },
+
+  loadDemandsByWeek() {
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE_KEYS.DEMANDS_BY_WEEK)) || {};
+    } catch {
+      return {};
+    }
+  },
+
+  saveDemandForWeek(weekStr, demand) {
+    if (!weekStr) return;
+    localStorage.setItem(`${STORAGE_KEYS.DEMAND_WEEK_PREFIX}${weekStr}`, JSON.stringify(demand));
+    const all = this.loadDemandsByWeek();
+    all[weekStr] = demand;
+    this.saveDemandsByWeek(all);
+  },
+
+  loadDemandForWeek(weekStr) {
+    if (!weekStr) return null;
+    const specific = localStorage.getItem(`${STORAGE_KEYS.DEMAND_WEEK_PREFIX}${weekStr}`);
+    if (specific) {
+      try {
+        return JSON.parse(specific);
+      } catch {}
+    }
+    const all = this.loadDemandsByWeek();
+    return all[weekStr] || null;
+  },
+
   savePatterns(patterns) {
     localStorage.setItem(STORAGE_KEYS.PATTERNS, JSON.stringify(patterns));
   },
@@ -284,6 +332,24 @@ const Scheduler = {
       demandT[d] = demand.afternoon[d] || 0;
       totalDemand += demandM[d] + demandT[d];
       totalDemandM += demandM[d];
+    }
+
+    // Minimum staffing checks:
+    // Rule: minimum 2 per shift on any day. Never less than 2 per shift.
+    // Rule: Friday, Saturday, Sunday ALWAYS have at least 3 employees per shift.
+    for (let d = 0; d < 7; d++) {
+      if (demandM[d] < 2 || demandT[d] < 2) {
+        return {
+          success: false,
+          error: `El personal mínimo por turno es de 2 empleados. Revisa los turnos del ${DAYS_FULL[d]} (Mañana: ${demandM[d]}, Tarde: ${demandT[d]}). Nunca puede haber menos de dos por turno.`,
+        };
+      }
+      if (d >= 4 && (demandM[d] < 3 || demandT[d] < 3)) {
+        return {
+          success: false,
+          error: `Los viernes, sábados y domingos siempre deben tener al menos 3 empleados por cada turno. Revisa el ${DAYS_FULL[d]} (Mañana: ${demandM[d]}, Tarde: ${demandT[d]}).`,
+        };
+      }
     }
 
     // Daily capacity check
@@ -399,32 +465,40 @@ const Scheduler = {
         const needsM = mCount[emp] < shiftTargets[emp].m;
         const needsT = tCount[emp] < shiftTargets[emp].t;
 
-        if (needsM && mAssigned < demandM[d]) {
+        if (mAssigned < demandM[d] && tAssigned < demandT[d]) {
+          if (needsM && !needsT) {
+            matrix[emp][d] = 'M';
+            mCount[emp]++;
+            mAssigned++;
+          } else if (needsT && !needsM) {
+            matrix[emp][d] = 'T';
+            tCount[emp]++;
+            tAssigned++;
+          } else {
+            const defM = shiftTargets[emp].m - mCount[emp];
+            const defT = shiftTargets[emp].t - tCount[emp];
+            if (defM >= defT) {
+              matrix[emp][d] = 'M';
+              mCount[emp]++;
+              mAssigned++;
+            } else {
+              matrix[emp][d] = 'T';
+              tCount[emp]++;
+              tAssigned++;
+            }
+          }
+        } else if (mAssigned < demandM[d]) {
           matrix[emp][d] = 'M';
           mCount[emp]++;
           mAssigned++;
-        } else if (needsT && tAssigned < demandT[d]) {
-          matrix[emp][d] = 'T';
-          tCount[emp]++;
-          tAssigned++;
-        } else if (needsM) {
-          matrix[emp][d] = 'M';
-          mCount[emp]++;
-          mAssigned++;
-        } else if (needsT) {
+        } else if (tAssigned < demandT[d]) {
           matrix[emp][d] = 'T';
           tCount[emp]++;
           tAssigned++;
         } else {
-          if (mAssigned < demandM[d]) {
-            matrix[emp][d] = 'M';
-            mCount[emp]++;
-            mAssigned++;
-          } else {
-            matrix[emp][d] = 'T';
-            tCount[emp]++;
-            tAssigned++;
-          }
+          matrix[emp][d] = 'T';
+          tCount[emp]++;
+          tAssigned++;
         }
       }
     }
@@ -645,11 +719,18 @@ const Renderer = {
 
   getEffectivePatternWeek(empIndex, weekStartStr) {
     const baseWeek = Storage.loadBaseWeek() || (this.weekStartInput ? this.weekStartInput.value : '');
-    const savedPatterns = Storage.loadPatterns() || [];
-    const basePattern = savedPatterns[empIndex] || DEFAULT_EMPLOYEE_PATTERNS[empIndex] || ((empIndex % 7) + 1);
-    if (!baseWeek || !weekStartStr) return basePattern;
+    const savedPatterns = Storage.loadPatterns();
+    if (savedPatterns && savedPatterns[empIndex] !== undefined) {
+      const basePattern = savedPatterns[empIndex] || ((empIndex % 7) + 1);
+      if (!baseWeek || !weekStartStr) return basePattern;
+      const diffWeeks = this._getWeeksDiff(baseWeek, weekStartStr);
+      return (((basePattern - 1 + diffWeeks) % 7) + 7) % 7 + 1;
+    }
+    const initialPos = DEFAULT_CYCLE_POSITIONS[empIndex] !== undefined ? DEFAULT_CYCLE_POSITIONS[empIndex] : (empIndex % 8);
+    if (!baseWeek || !weekStartStr) return CYCLE_8[initialPos];
     const diffWeeks = this._getWeeksDiff(baseWeek, weekStartStr);
-    return (((basePattern - 1 + diffWeeks) % 7) + 7) % 7 + 1;
+    const pos = (((initialPos + diffWeeks) % 8) + 8) % 8;
+    return CYCLE_8[pos];
   },
 
   getEffectivePatternWeeks(weekStartStr) {
@@ -836,11 +917,15 @@ const Renderer = {
   },
 
   loadDemandConfig(demand) {
+    if (!demand) return;
     document.querySelectorAll('.demand-input').forEach(input => {
       const shift = input.dataset.shift;
       const day = parseInt(input.dataset.day);
       if (demand[shift] && demand[shift][day] !== undefined) {
-        input.value = demand[shift][day];
+        let val = demand[shift][day];
+        if (day >= 4 && val < 3) val = 3;
+        else if (val < 2) val = 2;
+        input.value = val;
       }
     });
   },
@@ -853,6 +938,113 @@ const Renderer = {
       demand[shift][day] = parseInt(input.value) || 0;
     });
     return demand;
+  },
+
+  activeDemandWeekIndex: 0,
+  activeDemandWeekStr: null,
+
+  getActiveDemandWeekStr() {
+    const startWeek = this.weekStartInput ? this.weekStartInput.value : '';
+    if (!startWeek) return '';
+    const monday = this.getMonday(startWeek);
+    if (!monday) return startWeek;
+    monday.setDate(monday.getDate() + (this.activeDemandWeekIndex * 7));
+    return this._formatDate(monday);
+  },
+
+  getDemandForWeek(weekStr) {
+    if (!weekStr) return this.getDemandConfig();
+    if (this.activeDemandWeekStr === weekStr) {
+      return this.getDemandConfig();
+    }
+    const saved = Storage.loadDemandForWeek(weekStr);
+    if (saved) return saved;
+    const baseDemand = Storage.loadDemand();
+    if (baseDemand) return baseDemand;
+    return this.getDemandConfig();
+  },
+
+  renderDemandWeeksNav() {
+    const nav = document.getElementById('demand-weeks-nav');
+    const actions = document.getElementById('demand-actions');
+    const indicator = document.getElementById('demand-active-indicator');
+    const weeksCountSelect = document.getElementById('weeks-count');
+    const weeksCount = parseInt(weeksCountSelect ? weeksCountSelect.value : '1') || 1;
+    const startWeek = this.weekStartInput ? this.weekStartInput.value : '';
+
+    if (!nav || !startWeek) return;
+
+    if (weeksCount <= 1) {
+      nav.hidden = true;
+      nav.innerHTML = '';
+      if (actions) actions.hidden = true;
+      if (indicator) indicator.hidden = true;
+      this.activeDemandWeekIndex = 0;
+      this.activeDemandWeekStr = startWeek;
+      return;
+    }
+
+    nav.hidden = false;
+    if (actions) actions.hidden = false;
+    if (indicator) indicator.hidden = false;
+
+    if (this.activeDemandWeekIndex >= weeksCount || this.activeDemandWeekIndex < 0) {
+      this.activeDemandWeekIndex = 0;
+    }
+
+    const pillsHtml = [];
+    for (let w = 0; w < weeksCount; w++) {
+      const monday = this.getMonday(startWeek);
+      monday.setDate(monday.getDate() + (w * 7));
+      const weekStr = this._formatDate(monday);
+      const dates = this._getDayDates(weekStr);
+      const startStr = `${dates[0].date.split('/')[0]}/${dates[0].date.split('/')[1]}`;
+      const endStr = `${dates[6].date.split('/')[0]}/${dates[6].date.split('/')[1]}`;
+      const isActive = (w === this.activeDemandWeekIndex);
+      pillsHtml.push(`
+        <button type="button" class="week-pill ${isActive ? 'active' : ''}" data-index="${w}" data-week="${weekStr}">
+          Semana ${w + 1} (${startStr} - ${endStr})
+        </button>
+      `);
+    }
+    nav.innerHTML = pillsHtml.join('');
+
+    const activeMonday = this.getMonday(startWeek);
+    activeMonday.setDate(activeMonday.getDate() + (this.activeDemandWeekIndex * 7));
+    this.activeDemandWeekStr = this._formatDate(activeMonday);
+    const activeDates = this._getDayDates(this.activeDemandWeekStr);
+    if (indicator) {
+      indicator.textContent = `Demanda para: Semana ${this.activeDemandWeekIndex + 1} (${activeDates[0].date} - ${activeDates[6].date})`;
+    }
+
+    nav.querySelectorAll('.week-pill').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const targetIdx = parseInt(btn.dataset.index);
+        const targetWeek = btn.dataset.week;
+        if (targetIdx === this.activeDemandWeekIndex) return;
+
+        // 1. Guardar demanda de la semana actual antes de cambiar
+        if (this.activeDemandWeekStr) {
+          Storage.saveDemandForWeek(this.activeDemandWeekStr, this.getDemandConfig());
+        }
+
+        // 2. Cambiar a la nueva semana
+        this.activeDemandWeekIndex = targetIdx;
+        this.activeDemandWeekStr = targetWeek;
+
+        // 3. Cargar demanda de la semana seleccionada
+        const targetDemand = Storage.loadDemandForWeek(targetWeek) || this.getDemandConfig();
+        this.loadDemandConfig(targetDemand);
+
+        // 4. Actualizar botones e indicador
+        nav.querySelectorAll('.week-pill').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        if (indicator) {
+          const tDates = this._getDayDates(targetWeek);
+          indicator.textContent = `Demanda para: Semana ${targetIdx + 1} (${tDates[0].date} - ${tDates[6].date})`;
+        }
+      });
+    });
   },
 
   renderSchedule(matrix, employees, weekStart) {
@@ -968,7 +1160,8 @@ const Renderer = {
     });
 
     // 3. Update Live Audit & Balance panel
-    Auditor.run(this.currentMatrix, this.currentEmployees, this.getDemandConfig(), this.currentWeekStart);
+    const weekDemand = Storage.loadDemandForWeek(this.currentWeekStart) || this.getDemandForWeek(this.currentWeekStart);
+    Auditor.run(this.currentMatrix, this.currentEmployees, weekDemand, this.currentWeekStart);
 
     // 4. Update multi-week nav pills
     const genWeeks = Storage.loadGeneratedWeeks();
@@ -1271,12 +1464,17 @@ const Auditor = {
 
       const mOk = countM === reqM;
       const tOk = countT === reqT;
-      if (!mOk || !tOk) totalDemandMismatches++;
+      const minStaffOk = countM >= 2 && countT >= 2;
+      const weekendStaffOk = (d < 4) || (countM >= 3 && countT >= 3);
+      if (!mOk || !tOk || !minStaffOk || !weekendStaffOk) totalDemandMismatches++;
 
       const tag = document.createElement('span');
-      let statusClass = (mOk && tOk) ? 'ok' : 'err';
+      let statusClass = (mOk && tOk && minStaffOk && weekendStaffOk) ? 'ok' : 'err';
       tag.className = `audit-tag audit-tag--${statusClass}`;
-      tag.textContent = `${dayDates[d].short}: M ${countM}/${reqM} · T ${countT}/${reqT}`;
+      let staffNotice = '';
+      if (!minStaffOk) staffNotice = ' ⚠️ <2 personal';
+      else if (!weekendStaffOk) staffNotice = ' ⚠️ Fin de semana <3';
+      tag.textContent = `${dayDates[d].short}: M ${countM}/${reqM} · T ${countT}/${reqT}${staffNotice}`;
       tag.title = `${dayDates[d].name}: Mañana ${countM} asignados de ${reqM} requeridos; Tarde ${countT} asignados de ${reqT} requeridos`;
       demandSummary.appendChild(tag);
     }
@@ -1688,6 +1886,7 @@ const App = {
       }
     }
     this._updateWeekBadge(Renderer.weekStartInput.value);
+    Renderer.renderDemandWeeksNav();
   },
 
   _loadSavedState() {
@@ -1716,6 +1915,11 @@ const App = {
     };
     this.state.weekStart = config.weekStart;
     Storage.saveConfig(config);
+
+    const activeDemandWeekStr = Renderer.getActiveDemandWeekStr();
+    if (activeDemandWeekStr) {
+      Storage.saveDemandForWeek(activeDemandWeekStr, demand);
+    }
   },
 
   _updateWeekBadge(weekStr) {
@@ -1773,8 +1977,24 @@ const App = {
     // Save config on any change
     Renderer.employeeNamesContainer.addEventListener('input', () => this._saveState());
     document.querySelectorAll('.demand-input').forEach(input => {
-      input.addEventListener('change', () => this._saveState());
+      input.addEventListener('change', () => {
+        const day = parseInt(input.dataset.day);
+        let val = parseInt(input.value) || 0;
+        if (day >= 4 && val < 3) {
+          input.value = 3;
+          Toast.show('Viernes, sábados y domingos siempre deben tener al menos 3 empleados por cada turno.', 'warning', 3500);
+        } else if (val < 2) {
+          input.value = 2;
+          Toast.show('El personal mínimo por turno es de 2 empleados.', 'warning', 3500);
+        }
+        const activeWeekStr = Renderer.getActiveDemandWeekStr();
+        if (activeWeekStr) {
+          Storage.saveDemandForWeek(activeWeekStr, Renderer.getDemandConfig());
+        }
+        this._saveState();
+      });
     });
+
     Renderer.weekStartInput.addEventListener('change', () => {
       const current = Renderer.weekStartInput.value;
       const normalized = Renderer.normalizeToMonday(current);
@@ -1786,7 +2006,36 @@ const App = {
       this._saveState();
       this._updateWeekBadge(Renderer.weekStartInput.value);
       Renderer.updatePatternSelects();
+      Renderer.renderDemandWeeksNav();
     });
+
+    const weeksCountSelect = document.getElementById('weeks-count');
+    if (weeksCountSelect) {
+      weeksCountSelect.addEventListener('change', () => {
+        Storage.saveWeeksCount(weeksCountSelect.value);
+        Renderer.renderDemandWeeksNav();
+      });
+    }
+
+    const btnCopyDemand = document.getElementById('btn-copy-demand');
+    if (btnCopyDemand) {
+      btnCopyDemand.addEventListener('click', () => {
+        const currentDemand = Renderer.getDemandConfig();
+        const wcSelect = document.getElementById('weeks-count');
+        const wc = parseInt(wcSelect ? wcSelect.value : '1') || 1;
+        const startWeek = Renderer.weekStartInput.value;
+        if (!startWeek) return;
+
+        for (let w = 0; w < wc; w++) {
+          const monday = Renderer.getMonday(startWeek);
+          monday.setDate(monday.getDate() + (w * 7));
+          const weekStr = Renderer._formatDate(monday);
+          Storage.saveDemandForWeek(weekStr, JSON.parse(JSON.stringify(currentDemand)));
+        }
+        Storage.saveDemand(currentDemand);
+        Toast.show(`Demanda de la Semana ${Renderer.activeDemandWeekIndex + 1} copiada a las ${wc} semanas.`, 'success', 3500);
+      });
+    }
 
     // Week navigation buttons
     const btnPrevWeek = document.getElementById('btn-prev-week');
@@ -1854,13 +2103,7 @@ const App = {
       });
     }
 
-    // Weeks count selector
-    const weeksCountSelect = document.getElementById('weeks-count');
-    if (weeksCountSelect) {
-      weeksCountSelect.addEventListener('change', () => {
-        Storage.saveWeeksCount(parseInt(weeksCountSelect.value) || 1);
-      });
-    }
+
 
     // Load saved schedule on startup if available
     window.addEventListener('load', () => {
@@ -1892,11 +2135,16 @@ const App = {
     this._saveState();
 
     const employees = Renderer.getEmployeeNames();
-    const demand = Renderer.getDemandConfig();
     const startWeek = Renderer.weekStartInput.value;
     const weeksCountSelect = document.getElementById('weeks-count');
     const weeksCount = parseInt(weeksCountSelect ? weeksCountSelect.value : '1') || 1;
     Storage.saveWeeksCount(weeksCount);
+
+    // Save active demand week before generating
+    const activeDemandWeekStr = Renderer.getActiveDemandWeekStr();
+    if (activeDemandWeekStr) {
+      Storage.saveDemandForWeek(activeDemandWeekStr, Renderer.getDemandConfig());
+    }
 
     if (!Storage.loadBaseWeek()) {
       Storage.saveBaseWeek(startWeek);
@@ -1912,8 +2160,9 @@ const App = {
       const currentWeekStr = Renderer._formatDate(monday);
       const patternWeeks = Renderer.getEffectivePatternWeeks(currentWeekStr);
       const shiftTargets = Renderer.getEffectiveShiftTargets(currentWeekStr);
+      const weekDemand = Renderer.getDemandForWeek(currentWeekStr);
 
-      const result = Scheduler.generate(employees, demand, {
+      const result = Scheduler.generate(employees, weekDemand, {
         patternWeeks,
         weekStart: currentWeekStr,
         shiftTargets
@@ -1925,6 +2174,7 @@ const App = {
       }
 
       Storage.saveSchedule(result.matrix, currentWeekStr);
+      Storage.saveDemandForWeek(currentWeekStr, weekDemand);
       generatedWeeks.push(currentWeekStr);
       if (w === 0) {
         firstWeekMatrix = result.matrix;

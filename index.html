@@ -93,9 +93,23 @@
       </div>
 
       <!-- Demand matrix -->
-      <div class="config-block">
-        <h3>Matriz de Demanda por Turno</h3>
-        <p class="config-hint">Define cuántos empleados necesitas para cada turno y día.</p>
+      <div class="config-block" id="demand-config-block">
+        <div class="demand-header-flex">
+          <div>
+            <h3>Matriz de Demanda por Turno</h3>
+            <p class="config-hint">Define cuántos empleados necesitas para cada turno y día. Puedes configurar una demanda distinta para cada semana.</p>
+          </div>
+          <div class="demand-actions" id="demand-actions" hidden>
+            <button type="button" id="btn-copy-demand" class="btn btn-secondary btn-sm" title="Copiar los valores de la semana activa al resto de semanas">
+              📋 Copiar a todas las semanas
+            </button>
+          </div>
+        </div>
+
+        <!-- Weekly demand navigation pills for multi-week configuration -->
+        <div id="demand-weeks-nav" class="generated-weeks-nav demand-weeks-nav" hidden></div>
+        <div id="demand-active-indicator" class="demand-week-indicator" hidden></div>
+
         <div class="table-responsive">
           <table class="demand-table" id="demand-table">
             <thead>
@@ -113,23 +127,23 @@
             <tbody>
               <tr>
                 <td class="row-label row-label--morning">Mañana</td>
-                <td><input type="number" class="demand-input" data-shift="morning" data-day="0" min="0" value="3"></td>
-                <td><input type="number" class="demand-input" data-shift="morning" data-day="1" min="0" value="3"></td>
-                <td><input type="number" class="demand-input" data-shift="morning" data-day="2" min="0" value="3"></td>
-                <td><input type="number" class="demand-input" data-shift="morning" data-day="3" min="0" value="3"></td>
-                <td><input type="number" class="demand-input" data-shift="morning" data-day="4" min="0" value="3"></td>
-                <td><input type="number" class="demand-input" data-shift="morning" data-day="5" min="0" value="3"></td>
-                <td><input type="number" class="demand-input" data-shift="morning" data-day="6" min="0" value="2"></td>
+                <td><input type="number" class="demand-input" data-shift="morning" data-day="0" min="2" value="3"></td>
+                <td><input type="number" class="demand-input" data-shift="morning" data-day="1" min="2" value="3"></td>
+                <td><input type="number" class="demand-input" data-shift="morning" data-day="2" min="2" value="3"></td>
+                <td><input type="number" class="demand-input" data-shift="morning" data-day="3" min="2" value="3"></td>
+                <td><input type="number" class="demand-input" data-shift="morning" data-day="4" min="3" value="3"></td>
+                <td><input type="number" class="demand-input" data-shift="morning" data-day="5" min="3" value="3"></td>
+                <td><input type="number" class="demand-input" data-shift="morning" data-day="6" min="3" value="3"></td>
               </tr>
               <tr>
                 <td class="row-label row-label--afternoon">Tarde</td>
-                <td><input type="number" class="demand-input" data-shift="afternoon" data-day="0" min="0" value="3"></td>
-                <td><input type="number" class="demand-input" data-shift="afternoon" data-day="1" min="0" value="3"></td>
-                <td><input type="number" class="demand-input" data-shift="afternoon" data-day="2" min="0" value="3"></td>
-                <td><input type="number" class="demand-input" data-shift="afternoon" data-day="3" min="0" value="3"></td>
-                <td><input type="number" class="demand-input" data-shift="afternoon" data-day="4" min="0" value="3"></td>
-                <td><input type="number" class="demand-input" data-shift="afternoon" data-day="5" min="0" value="3"></td>
-                <td><input type="number" class="demand-input" data-shift="afternoon" data-day="6" min="0" value="2"></td>
+                <td><input type="number" class="demand-input" data-shift="afternoon" data-day="0" min="2" value="3"></td>
+                <td><input type="number" class="demand-input" data-shift="afternoon" data-day="1" min="2" value="3"></td>
+                <td><input type="number" class="demand-input" data-shift="afternoon" data-day="2" min="2" value="2"></td>
+                <td><input type="number" class="demand-input" data-shift="afternoon" data-day="3" min="2" value="2"></td>
+                <td><input type="number" class="demand-input" data-shift="afternoon" data-day="4" min="3" value="3"></td>
+                <td><input type="number" class="demand-input" data-shift="afternoon" data-day="5" min="3" value="3"></td>
+                <td><input type="number" class="demand-input" data-shift="afternoon" data-day="6" min="3" value="3"></td>
               </tr>
             </tbody>
           </table>
@@ -327,6 +341,22 @@
                 <strong>Empleado 1 Clave (Solo Mañana)</strong>
               </div>
               <p>Trabaja exclusivamente en turno de mañana durante sus 5 días laborables y descansa en sus 2 días consecutivos según el patrón rotativo.</p>
+            </div>
+
+            <div class="help-feature-card">
+              <div class="help-feature-header">
+                <span class="help-feature-icon">👥</span>
+                <strong>Dotación Mínima: Mín. 2 / Fines de Semana 3</strong>
+              </div>
+              <p>Nunca puede haber menos de 2 empleados por turno en ningún día. Los viernes, sábados y domingos siempre contarán obligatoriamente con 3 empleados en el turno de mañana y 3 en el de tarde.</p>
+            </div>
+
+            <div class="help-feature-card">
+              <div class="help-feature-header">
+                <span class="help-feature-icon">📊</span>
+                <strong>Demanda Semanal Personalizable</strong>
+              </div>
+              <p>Al seleccionar generar varias semanas, puedes definir una matriz de demanda distinta para cada semana usando las pestañas de navegación de la demanda, o usar el botón <em>Copiar a todas las semanas</em> para duplicar la configuración rápidamente.</p>
             </div>
 
             <div class="help-feature-card">
