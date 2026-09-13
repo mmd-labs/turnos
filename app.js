@@ -1,13 +1,7 @@
 /* ============================================
    CONSTANTS
    ============================================ */
-const CREDENTIALS = [
-  { user: 'owner', pass: 'Pasteleria2021' },
-  { user: 'mar', pass: 'Turnos1234' },
-];
-
 const STORAGE_KEYS = {
-  SESSION: 'turnos_session',
   NAMES: 'turnos_employee_names',
   CONFIG: 'turnos_config',
   SCHEDULE: 'turnos_schedule',
@@ -23,18 +17,6 @@ const DAYS_OFF_PER_EMPLOYEE = 2;
    MODULE: Storage
    ============================================ */
 const Storage = {
-  saveSession(user) {
-    sessionStorage.setItem(STORAGE_KEYS.SESSION, user);
-  },
-
-  getSession() {
-    return sessionStorage.getItem(STORAGE_KEYS.SESSION);
-  },
-
-  clearSession() {
-    sessionStorage.removeItem(STORAGE_KEYS.SESSION);
-  },
-
   saveNames(names) {
     localStorage.setItem(STORAGE_KEYS.NAMES, JSON.stringify(names));
   },
@@ -73,28 +55,6 @@ const Storage = {
 
   clearSchedule() {
     localStorage.removeItem(STORAGE_KEYS.SCHEDULE);
-  },
-};
-
-/* ============================================
-   MODULE: Auth
-   ============================================ */
-const Auth = {
-  login(user, pass) {
-    return CREDENTIALS.some(c => c.user === user && c.pass === pass);
-  },
-
-  logout() {
-    Storage.clearSession();
-    Renderer.showLogin();
-  },
-
-  isLoggedIn() {
-    return !!Storage.getSession();
-  },
-
-  getUser() {
-    return Storage.getSession();
   },
 };
 
@@ -149,15 +109,13 @@ const Scheduler = {
 
     for (const d of offDaysEmp12) {
       matrix[0][d] = 'L';
-      matrix[1][d] = 'L';
-      offCount[d] += 2;
+      offCount[d] += 1;
     }
 
-    // Emp 1 & 2 work Morning on their working days
+    // Emp 1 works Morning on their working days
     for (let d = 0; d < 7; d++) {
       if (matrix[0][d] === null) {
         matrix[0][d] = 'M';
-        matrix[1][d] = 'M';
       }
     }
 
@@ -184,7 +142,7 @@ const Scheduler = {
     // Each employee needs exactly DAYS_OFF_PER_EMPLOYEE off days
     const offAssigned = Array(7).fill(0); // count of remaining employees off per day
 
-    for (let emp = 2; emp < n; emp++) {
+    for (let emp = 1; emp < n; emp++) {
       let daysOff = 0;
       // Find days where we can still assign off (haven't exceeded max)
       // Sort days by remaining capacity (most room first) to spread out off days
@@ -232,16 +190,15 @@ const Scheduler = {
     const mCount = Array(n).fill(0);
     const tCount = Array(n).fill(0);
 
-    // Already set Emp 1&2 as M
+    // Already set Emp 1 as M
     for (let d = 0; d < 7; d++) {
       if (matrix[0][d] === 'M') mCount[0]++;
-      if (matrix[1][d] === 'M') mCount[1]++;
     }
 
     // For each day, assign shifts to remaining employees
     for (let d = 0; d < 7; d++) {
       const workingEmps = [];
-      for (let emp = 2; emp < n; emp++) {
+      for (let emp = 1; emp < n; emp++) {
         if (matrix[emp][d] === null) {
           workingEmps.push(emp);
         }
@@ -295,7 +252,7 @@ const Scheduler = {
     // Simple pass: for each employee, if T on day d and M on day d+1, try to swap with another employee
     for (let pass = 0; pass < 3; pass++) {
       let improved = false;
-      for (let emp = 2; emp < n; emp++) {
+      for (let emp = 1; emp < n; emp++) {
         for (let d = 0; d < 6; d++) {
           if (matrix[emp][d] === 'T' && matrix[emp][d + 1] === 'M') {
             // Try to find another employee to swap with
@@ -334,13 +291,8 @@ const Scheduler = {
    ============================================ */
 const Renderer = {
   init() {
-    this.loginPanel = document.getElementById('login-panel');
     this.configPanel = document.getElementById('config-panel');
     this.schedulePanel = document.getElementById('schedule-panel');
-    this.appHeader = document.getElementById('app-header');
-    this.loginForm = document.getElementById('login-form');
-    this.loginError = document.getElementById('login-error');
-    this.headerUsername = document.getElementById('header-username');
     this.weekStartInput = document.getElementById('week-start');
     this.employeeCountInput = document.getElementById('employee-count');
     this.employeeNamesContainer = document.getElementById('employee-names');
@@ -349,36 +301,14 @@ const Renderer = {
     this.pdfWeekRange = document.getElementById('pdf-week-range');
   },
 
-  showLogin() {
-    this.loginPanel.hidden = false;
-    this.configPanel.hidden = true;
-    this.schedulePanel.hidden = true;
-    this.appHeader.hidden = true;
-  },
-
   showConfig() {
-    this.loginPanel.hidden = true;
     this.configPanel.hidden = false;
     this.schedulePanel.hidden = true;
-    this.appHeader.hidden = false;
-    this.headerUsername.textContent = Auth.getUser();
   },
 
   showSchedule() {
-    this.loginPanel.hidden = true;
     this.configPanel.hidden = true;
     this.schedulePanel.hidden = false;
-    this.appHeader.hidden = false;
-    this.headerUsername.textContent = Auth.getUser();
-  },
-
-  showError(msg) {
-    this.loginError.textContent = msg;
-    this.loginError.hidden = false;
-  },
-
-  hideError() {
-    this.loginError.hidden = true;
   },
 
   setDefaultWeekStart() {
@@ -588,12 +518,7 @@ const App = {
   init() {
     Renderer.init();
     this._bindEvents();
-
-    if (Auth.isLoggedIn()) {
-      this._enterApp();
-    } else {
-      Renderer.showLogin();
-    }
+    this._enterApp();
   },
 
   _enterApp() {
@@ -642,23 +567,6 @@ const App = {
   },
 
   _bindEvents() {
-    // Login
-    Renderer.loginForm.addEventListener('submit', (e) => {
-      e.preventDefault();
-      Renderer.hideError();
-      const user = document.getElementById('login-user').value.trim();
-      const pass = document.getElementById('login-pass').value;
-      if (Auth.login(user, pass)) {
-        Storage.saveSession(user);
-        this._enterApp();
-      } else {
-        Renderer.showError('Credenciales incorrectas. Intenta de nuevo.');
-      }
-    });
-
-    // Logout
-    document.getElementById('btn-logout').addEventListener('click', () => Auth.logout());
-
     // Employee count change
     Renderer.employeeCountInput.addEventListener('change', () => {
       let count = parseInt(Renderer.employeeCountInput.value);
@@ -699,7 +607,7 @@ const App = {
     // Load saved schedule on startup if available
     window.addEventListener('load', () => {
       const saved = Storage.loadSchedule();
-      if (saved && Auth.isLoggedIn()) {
+      if (saved) {
         const names = Storage.loadNames();
         if (names && saved.length === names.length) {
           this.state.employeeNames = names;
