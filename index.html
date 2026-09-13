@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gestión de Turnos Laborales</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" defer></script>
+</head>
+<body>
+  <!-- HEADER -->
+  <header class="app-header" id="app-header" hidden>
+    <div class="header-content">
+      <h1 class="app-title">Gestión de Turnos</h1>
+      <div class="header-user">
+        <span id="header-username"></span>
+        <button id="btn-logout" class="btn btn-outline btn-sm">Cerrar sesión</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- LOGIN PANEL -->
+  <main id="login-panel" class="panel-login">
+    <div class="login-card">
+      <div class="login-logo">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+          <line x1="16" y1="2" x2="16" y2="6"></line>
+          <line x1="8" y1="2" x2="8" y2="6"></line>
+          <line x1="3" y1="10" x2="21" y2="10"></line>
+        </svg>
+      </div>
+      <h2>Iniciar Sesión</h2>
+      <form id="login-form" autocomplete="off">
+        <div class="form-group">
+          <label for="login-user">Usuario</label>
+          <input type="text" id="login-user" placeholder="Ingresa tu usuario" required>
+        </div>
+        <div class="form-group">
+          <label for="login-pass">Contraseña</label>
+          <input type="password" id="login-pass" placeholder="Ingresa tu contraseña" required>
+        </div>
+        <div id="login-error" class="form-error" hidden>Credenciales incorrectas</div>
+        <button type="submit" class="btn btn-primary btn-block">Ingresar</button>
+      </form>
+    </div>
+  </main>
+
+  <!-- CONFIG PANEL -->
+  <section id="config-panel" class="panel-section" hidden>
+    <div class="section-container">
+      <h2 class="section-title">Configuración Semanal</h2>
+
+      <!-- Week selector -->
+      <div class="config-row">
+        <div class="form-group">
+          <label for="week-start">Semana del (lunes)</label>
+          <input type="date" id="week-start">
+        </div>
+      </div>
+
+      <!-- Employee count -->
+      <div class="config-row">
+        <div class="form-group">
+          <label for="employee-count">Cantidad de empleados</label>
+          <input type="number" id="employee-count" min="8" max="50" value="8">
+        </div>
+      </div>
+
+      <!-- Employee names -->
+      <div class="config-block">
+        <h3>Plantilla de Empleados</h3>
+        <div id="employee-names" class="employee-grid"></div>
+      </div>
+
+      <!-- Demand matrix -->
+      <div class="config-block">
+        <h3>Matriz de Demanda por Turno</h3>
+        <p class="config-hint">Define cuántos empleados necesitas para cada turno y día.</p>
+        <div class="table-responsive">
+          <table class="demand-table" id="demand-table">
+            <thead>
+              <tr>
+                <th>Turno</th>
+                <th>Lun</th>
+                <th>Mar</th>
+                <th>Mié</th>
+                <th>Jue</th>
+                <th>Vie</th>
+                <th>Sáb</th>
+                <th>Dom</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="row-label row-label--morning">Mañana</td>
+                <td><input type="number" class="demand-input" data-shift="morning" data-day="0" min="0" value="4"></td>
+                <td><input type="number" class="demand-input" data-shift="morning" data-day="1" min="0" value="3"></td>
+                <td><input type="number" class="demand-input" data-shift="morning" data-day="2" min="0" value="3"></td>
+                <td><input type="number" class="demand-input" data-shift="morning" data-day="3" min="0" value="3"></td>
+                <td><input type="number" class="demand-input" data-shift="morning" data-day="4" min="0" value="4"></td>
+                <td><input type="number" class="demand-input" data-shift="morning" data-day="5" min="0" value="3"></td>
+                <td><input type="number" class="demand-input" data-shift="morning" data-day="6" min="0" value="2"></td>
+              </tr>
+              <tr>
+                <td class="row-label row-label--afternoon">Tarde</td>
+                <td><input type="number" class="demand-input" data-shift="afternoon" data-day="0" min="0" value="3"></td>
+                <td><input type="number" class="demand-input" data-shift="afternoon" data-day="1" min="0" value="4"></td>
+                <td><input type="number" class="demand-input" data-shift="afternoon" data-day="2" min="0" value="3"></td>
+                <td><input type="number" class="demand-input" data-shift="afternoon" data-day="3" min="0" value="4"></td>
+                <td><input type="number" class="demand-input" data-shift="afternoon" data-day="4" min="0" value="3"></td>
+                <td><input type="number" class="demand-input" data-shift="afternoon" data-day="5" min="0" value="4"></td>
+                <td><input type="number" class="demand-input" data-shift="afternoon" data-day="6" min="0" value="2"></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <button id="btn-generate" class="btn btn-primary btn-lg">Generar Cuadrante</button>
+    </div>
+  </section>
+
+  <!-- SCHEDULE PANEL -->
+  <section id="schedule-panel" class="panel-section" hidden>
+    <div class="section-container">
+      <div class="schedule-header">
+        <h2 class="section-title">Cuadrante Semanal</h2>
+        <div class="schedule-actions">
+          <button id="btn-edit" class="btn btn-outline">Volver a Configurar</button>
+          <button id="btn-export" class="btn btn-primary">Exportar a PDF</button>
+        </div>
+      </div>
+      <div class="table-responsive">
+        <table class="schedule-table" id="schedule-table">
+          <thead>
+            <tr>
+              <th class="col-employee">Empleado</th>
+              <th>Lun</th>
+              <th>Mar</th>
+              <th>Mié</th>
+              <th>Jue</th>
+              <th>Vie</th>
+              <th>Sáb</th>
+              <th>Dom</th>
+            </tr>
+          </thead>
+          <tbody id="schedule-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- PDF EXPORT CONTAINER (hidden, used for capture) -->
+  <div id="pdf-container" class="pdf-container">
+    <div id="pdf-header" class="pdf-header">
+      <h1>Cuadrante de Turnos Semanal</h1>
+      <p id="pdf-week-range"></p>
+    </div>
+    <table class="pdf-table" id="pdf-table">
+      <thead>
+        <tr>
+          <th>Empleado</th>
+          <th>Lunes</th>
+          <th>Martes</th>
+          <th>Miércoles</th>
+          <th>Jueves</th>
+          <th>Viernes</th>
+          <th>Sábado</th>
+          <th>Domingo</th>
+        </tr>
+      </thead>
+      <tbody id="pdf-body"></tbody>
+    </table>
+    <div class="pdf-legend">
+      <span><strong>M</strong> = Mañana</span>
+      <span><strong>T</strong> = Tarde</span>
+      <span><strong>L</strong> = Libre</span>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
