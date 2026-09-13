@@ -15,6 +15,17 @@ const MIN_EMPLOYEES = 8;
 const DEFAULT_EMPLOYEES = 8;
 const DAYS_OFF_PER_EMPLOYEE = 2;
 
+const DEFAULT_EMPLOYEE_NAMES = [
+  'Mar',
+  'Clary',
+  'Estrella',
+  'Lidia',
+  'Melody',
+  'Ashley',
+  'Idaira',
+  'Scarleth',
+];
+
 /* ============================================
    MODULE: Toast Notifications
    ============================================ */
@@ -521,14 +532,20 @@ const Renderer = {
   renderEmployeeNames(count, savedNames) {
     this.employeeNamesContainer.innerHTML = '';
     for (let i = 0; i < count; i++) {
+      const defaultName = DEFAULT_EMPLOYEE_NAMES[i] || `Empleado ${i + 1}`;
+      // Si el nombre guardado es el antiguo genérico "Empleado X", usar el nombre fijado por defecto
+      let currentName = defaultName;
+      if (savedNames && savedNames[i] && savedNames[i] !== `Empleado ${i + 1}`) {
+        currentName = savedNames[i];
+      }
       const div = document.createElement('div');
       div.className = 'form-group';
       const keyNotice = (i === 0) ? ' <span style="font-size:0.75rem; color:var(--color-primary); font-weight:600;">(Clave - Solo Mañana)</span>' : '';
       div.innerHTML = `
         <label for="emp-name-${i}">Empleado ${i + 1}${keyNotice}</label>
         <input type="text" id="emp-name-${i}" data-index="${i}"
-               value="${savedNames && savedNames[i] ? this._escapeHtml(savedNames[i]) : `Empleado ${i + 1}`}"
-               placeholder="Nombre del empleado">
+               value="${this._escapeHtml(currentName)}"
+               placeholder="${this._escapeHtml(defaultName)}">
       `;
       this.employeeNamesContainer.appendChild(div);
     }
@@ -536,7 +553,11 @@ const Renderer = {
 
   getEmployeeNames() {
     const inputs = this.employeeNamesContainer.querySelectorAll('input');
-    return Array.from(inputs).map(input => input.value.trim() || `Empleado ${parseInt(input.dataset.index) + 1}`);
+    return Array.from(inputs).map(input => {
+      const idx = parseInt(input.dataset.index);
+      const defaultName = DEFAULT_EMPLOYEE_NAMES[idx] || `Empleado ${idx + 1}`;
+      return input.value.trim() || defaultName;
+    });
   },
 
   loadDemandConfig(demand) {
@@ -1288,7 +1309,13 @@ const App = {
 
   _loadSavedState() {
     const names = Storage.loadNames();
-    if (names) this.state.employeeNames = names;
+    const isOldGeneric = names && names.every((n, i) => n === `Empleado ${i + 1}`);
+    if (names && names.length > 0 && !isOldGeneric) {
+      this.state.employeeNames = names;
+    } else {
+      this.state.employeeNames = [...DEFAULT_EMPLOYEE_NAMES];
+      Storage.saveNames(this.state.employeeNames);
+    }
     const config = Storage.loadConfig();
     if (config) this.state.weekStart = config.weekStart;
   },
