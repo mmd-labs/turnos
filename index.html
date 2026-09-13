@@ -21,6 +21,9 @@
         <h1 class="brand-title">Gestión de Turnos</h1>
       </div>
       <div class="header-actions">
+        <button type="button" id="help-toggle" class="btn btn-icon btn-help" title="Manual de ayuda y guía de uso" aria-label="Ayuda y manual de uso">
+          <span class="help-btn-symbol">?</span>
+        </button>
         <button type="button" id="theme-toggle" class="btn btn-icon" title="Cambiar modo claro / oscuro" aria-label="Cambiar tema">
           <span id="theme-icon">🌙</span>
         </button>
@@ -195,6 +198,165 @@
       </div>
       <div class="modal-footer">
         <button type="button" id="btn-copy-individual" class="btn btn-primary">Copiar Horario para WhatsApp</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- HELP & USER MANUAL MODAL -->
+  <div id="help-modal" class="modal-backdrop" hidden>
+    <div class="modal-card modal-card--large">
+      <div class="modal-header">
+        <div class="modal-title-with-icon">
+          <span class="modal-header-icon">📖</span>
+          <h3 id="help-modal-title">Manual de Uso y Ayuda</h3>
+        </div>
+        <button type="button" id="help-modal-close" class="modal-close-btn" aria-label="Cerrar">&times;</button>
+      </div>
+      <div class="modal-body modal-body--scrollable help-modal-content">
+        <!-- Flujo Básico -->
+        <div class="help-section">
+          <h4 class="help-section-title">🚀 Flujo Básico: Cómo generar y exportar tu cuadrante</h4>
+          <p class="help-intro-text">Sigue estos 5 pasos para obtener un cuadrante de turnos equilibrado y listo para exportar:</p>
+
+          <div class="help-steps-list">
+            <div class="help-step-item">
+              <div class="help-step-number">1</div>
+              <div class="help-step-details">
+                <strong>Selecciona la semana en el calendario</strong>
+                <p>Haz clic en el selector de fecha. Puedes marcar cualquier día: el sistema detecta y se ancla automáticamente al <strong>lunes</strong> de esa semana para que los días cuadren con exactitud. Utiliza <code>←</code> y <code>→</code> para cambiar de semana.</p>
+              </div>
+            </div>
+
+            <div class="help-step-item">
+              <div class="help-step-number">2</div>
+              <div class="help-step-details">
+                <strong>Configura la plantilla de empleados</strong>
+                <p>Indica el número de trabajadores (mínimo 8). Los nombres iniciales vienen fijados por defecto (<em>Mar, Clary, Estrella, Lidia, Melody, Ashley, Idaira y Scarleth</em>). Puedes editarlos o cambiarlos con total libertad.</p>
+                <div class="help-note">
+                  <span>📌 <strong>Empleado Clave 1 (Mar):</strong> Trabaja exclusivamente en turno de <strong>Mañana</strong> y libra de forma automática en los 2 días con menor demanda semanal.</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="help-step-item">
+              <div class="help-step-number">3</div>
+              <div class="help-step-details">
+                <strong>Define la demanda de personal por turno</strong>
+                <p>En la tabla, indica cuántos empleados requieres cada día (de Lunes a Domingo) para el turno de <strong>Mañana</strong> y cuántos para el de <strong>Tarde</strong>.</p>
+              </div>
+            </div>
+
+            <div class="help-step-item">
+              <div class="help-step-number">4</div>
+              <div class="help-step-details">
+                <strong>Pulsa "Generar Cuadrante"</strong>
+                <p>El motor inteligente calculará la asignación respetando todas las reglas:</p>
+                <ul class="help-bullet-list">
+                  <li>Asigna estrictamente <strong>2 días libres semanales</strong> a cada empleado.</li>
+                  <li>Garantiza que <strong>todos los trabajadores tengan al menos 1 turno de mañana</strong> en la semana.</li>
+                  <li>Aplica <strong>optimización ergonómica</strong> para evitar turnos de fatiga (Tarde seguida de Mañana al día siguiente).</li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="help-step-item">
+              <div class="help-step-number">5</div>
+              <div class="help-step-details">
+                <strong>Revisa, ajusta manualmente y exporta a PDF</strong>
+                <p>En el cuadrante generado puedes cambiar cualquier turno individual mediante los selectores en vivo. La auditoría se recalcula de inmediato. Pulsa <strong>"Exportar a PDF"</strong> para obtener un documento A4 apaisado profesional listo para imprimir.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Guía de Funciones -->
+        <div class="help-section">
+          <h4 class="help-section-title">⚙️ Todas las Funciones y Herramientas del Sistema</h4>
+          <div class="help-features-grid">
+            <div class="help-feature-card">
+              <div class="help-feature-header">
+                <span class="help-feature-icon">☀️</span>
+                <strong>Turnos Mañana / Tarde / Libre</strong>
+              </div>
+              <p>Turnos de <strong>Mañana (M)</strong> y <strong>Tarde (T)</strong> de 8 horas laborables, y <strong>Libre (L)</strong> para descanso.</p>
+            </div>
+
+            <div class="help-feature-card">
+              <div class="help-feature-header">
+                <span class="help-feature-icon">👑</span>
+                <strong>Empleado 1 Clave (Solo Mañana)</strong>
+              </div>
+              <p>Fijo en turno de mañana durante sus 5 días laborables y libra en los 2 días de menor demanda.</p>
+            </div>
+
+            <div class="help-feature-card">
+              <div class="help-feature-header">
+                <span class="help-feature-icon">🔄</span>
+                <strong>Mínimo 1 Mañana Garantizada</strong>
+              </div>
+              <p>Todos los empleados rotan equitativamente asegurando al menos una mañana para cada uno.</p>
+            </div>
+
+            <div class="help-feature-card">
+              <div class="help-feature-header">
+                <span class="help-feature-icon">🏖️</span>
+                <strong>Descanso Semanal Obligatorio</strong>
+              </div>
+              <p>Cada empleado tiene exactamente 2 días de libranza semanal (40 horas semanales / 5 días trabajados).</p>
+            </div>
+
+            <div class="help-feature-card">
+              <div class="help-feature-header">
+                <span class="help-feature-icon">🛡️</span>
+                <strong>Optimización Ergonómica</strong>
+              </div>
+              <p>Reduce al mínimo las secuencias fatigosas <code>Tarde ➔ Mañana</code> mediante intercambios entre turnos de trabajo sin alterar días libres.</p>
+            </div>
+
+            <div class="help-feature-card">
+              <div class="help-feature-header">
+                <span class="help-feature-icon">🔍</span>
+                <strong>Auditoría y Balance en Vivo</strong>
+              </div>
+              <p>Supervisa en tiempo real la cobertura exacta de demanda, el cómputo de libres y avisa de posibles infracciones ergonómicas.</p>
+            </div>
+
+            <div class="help-feature-card">
+              <div class="help-feature-header">
+                <span class="help-feature-icon">👤</span>
+                <strong>Horario Individual para WhatsApp</strong>
+              </div>
+              <p>Consulta el cuadrante exclusivo de un empleado y cópialo con formato de texto y emojis para WhatsApp en un clic.</p>
+            </div>
+
+            <div class="help-feature-card">
+              <div class="help-feature-header">
+                <span class="help-feature-icon">📲</span>
+                <strong>Compartir Cuadrante Completo</strong>
+              </div>
+              <p>Envía o copia el cuadrante de toda la semana para compartirlo con el grupo de trabajo.</p>
+            </div>
+
+            <div class="help-feature-card">
+              <div class="help-feature-header">
+                <span class="help-feature-icon">📊</span>
+                <strong>Exportación a Excel (CSV)</strong>
+              </div>
+              <p>Descarga los datos en formato CSV para abrir y procesar en Excel, Google Sheets o Calc.</p>
+            </div>
+
+            <div class="help-feature-card">
+              <div class="help-feature-header">
+                <span class="help-feature-icon">💾</span>
+                <strong>Persistencia Automática</strong>
+              </div>
+              <p>Los datos se conservan en tu navegador por semana: nombres, demandas y cuadrantes guardados permanecen siempre listos.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" id="btn-close-help" class="btn btn-primary">Entendido, cerrar manual</button>
       </div>
     </div>
   </div>
