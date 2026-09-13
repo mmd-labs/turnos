@@ -10,11 +10,13 @@ Funciona íntegramente en el navegador (100% client-side), sin necesidad de base
 
 - **Asignación Heurística Inteligente**: Algoritmo que distribuye descansos y turnos respetando la capacidad del equipo y la demanda de cada día.
 - **Reglas y Restricciones Duras**:
-  - Empleados clave (Empleado 1 y Empleado 2): trabajan exclusivamente en turno de **Mañana** y **libran juntos** en los 2 días de menor demanda semanal.
+  - Empleado clave (Empleado 1): trabaja exclusivamente en turno de **Mañana** y libra en los 2 días de menor demanda semanal.
+  - Empleado 2 y resto de la plantilla: rotan entre turnos de **Mañana** y **Tarde** con la misma lógica general.
   - Cada empleado disfruta estrictamente de **2 días libres semanales** (`L`).
+  - **Mínimo 1 Mañana por Empleado**: Todos los empleados tienen garantizado al menos **1 turno de Mañana** a la semana.
 - **Optimización Ergonómica de Descanso**:
   - Reduce al mínimo las secuencias fatigosas de **Tarde seguida de Mañana** (`T -> M`).
-  - Realiza intercambios exclusivos entre turnos de trabajo (`M` $\leftrightarrow$ `T`), garantizando que ningún trabajador pierda o gane días libres en la optimización.
+  - Realiza intercambios exclusivos entre turnos de trabajo (`M` $\leftrightarrow$ `T`), garantizando que ningún trabajador pierda o gane días libres en la optimización ni se quede sin su turno de mañana mínimo.
 - **Cuadrante Visual por Turnos**:
   - Columnas organizadas con el **Día y la Fecha del calendario** (Lunes a Domingo con día y mes).
   - Filas fijas para cada turno: **Mañana**, **Tarde** y **Libre**.
@@ -31,22 +33,24 @@ Funciona íntegramente en el navegador (100% client-side), sin necesidad de base
 
 ## 📋 Reglas del Motor de Planificación
 
-El motor (`Scheduler` en [`app.js`](file:///home/d4rkd4y/workspace/turnos/app.js)) opera en 4 fases:
+El motor (`Scheduler` en [`app.js`](file:///Users/mario/workspace/turnos/app.js)) opera en 4 fases:
 
 1. **Validaciones de Capacidad**:
    - **Capacidad Total**: La demanda total de la semana no puede superar la capacidad máxima disponible ($\text{Empleados} \times 5$ días laborables).
    - **Capacidad Diaria**: En ningún día la demanda $(\text{Mañana} + \text{Tarde})$ puede superar la plantilla total de empleados.
-2. **Fase 1 (Empleados Clave 1 y 2)**:
-   - Identifica los 2 días de la semana con menor demanda combinada y les asigna libre (`L`) de forma conjunta.
-   - En sus 5 días laborables restantes, se les asigna exclusivamente turno de Mañana (`M`).
+   - **Capacidad de Mañanas**: La demanda total de mañanas debe ser suficiente para cubrir las 5 mañanas del Empleado 1 y al menos 1 mañana para cada uno de los restantes $N - 1$ empleados ($\text{Demanda Mañanas} \ge N + 4$).
+2. **Fase 1 (Empleado Clave 1)**:
+   - Identifica los 2 días de la semana con menor demanda y le asigna libre (`L`).
+   - En sus 5 días laborables restantes, se le asigna exclusivamente turno de Mañana (`M`).
 3. **Fase 2 (Distribución de Días Libres)**:
-   - Para los empleados restantes, calcula la holgura diaria y asigna equitativamente 2 días libres (`L`) priorizando los días con mayor margen de plantilla.
-4. **Fase 3 (Asignación de Turnos Mañana/Tarde)**:
-   - Contabiliza con precisión los turnos de mañana ya cubiertos por los empleados clave.
-   - Asigna los turnos restantes (`M` y `T`) equilibrando la carga individual de mañanas y tardes acumuladas.
+   - Para los empleados restantes (Empleados 2 a N), calcula la holgura diaria y asigna equitativamente 2 días libres (`L`) priorizando los días con mayor margen de plantilla.
+4. **Fase 3 (Asignación de Turnos Mañana/Tarde y Mínimo Garantizado)**:
+   - Contabiliza con precisión los turnos de mañana ya cubiertos por el empleado clave.
+   - Asigna los turnos restantes (`M` y `T`) priorizando a quienes aún no tienen turno de mañana y balanceando la carga acumulada.
+   - Aplica un paso de garantía estricta para asegurar que **todos los empleados tengan al menos 1 turno de mañana**.
 5. **Fase 4 (Optimización Ergonómica)**:
    - Detecta transiciones perjudiciales `T -> M` entre días consecutivos.
-   - Ejecuta intercambios entre trabajadores en el mismo día preservando invariantes: la demanda diaria se mantiene exacta y cada trabajador mantiene inalterados sus 2 días libres semanales.
+   - Ejecuta intercambios entre trabajadores en el mismo día preservando invariantes: la demanda diaria se mantiene exacta, cada trabajador mantiene sus 2 días libres semanales y nadie pierde su turno de mañana mínimo.
 
 ---
 
@@ -67,7 +71,7 @@ El motor (`Scheduler` en [`app.js`](file:///home/d4rkd4y/workspace/turnos/app.js
 1. **Semana de Trabajo**: Selecciona la fecha del lunes de la semana que deseas planificar.
 2. **Plantilla de Empleados**:
    - Define el número de empleados (mínimo 8).
-   - Edita los nombres en las tarjetas correspondientes. Los dos primeros actuarán como empleados clave de turno de mañana.
+   - Edita los nombres en las tarjetas correspondientes. El primer empleado actuará como empleado clave de turno de mañana.
 3. **Matriz de Demanda**:
    - Especifica cuántos trabajadores se requieren cada día de la semana (Lunes a Domingo) para el turno de **Mañana** y para el turno de **Tarde**.
 4. **Generar Cuadrante**:

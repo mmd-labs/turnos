@@ -167,10 +167,12 @@ const Scheduler = {
     const demandM = [];
     const demandT = [];
     let totalDemand = 0;
+    let totalDemandM = 0;
     for (let d = 0; d < 7; d++) {
       demandM[d] = demand.morning[d] || 0;
       demandT[d] = demand.afternoon[d] || 0;
       totalDemand += demandM[d] + demandT[d];
+      totalDemandM += demandM[d];
     }
 
     // Daily capacity check
@@ -194,42 +196,56 @@ const Scheduler = {
       };
     }
 
+    // Morning capacity check: Emp 1 needs 5 morning shifts, and each of the other n-1 employees needs at least 1 morning shift
+    const minMorningsRequired = 5 + (n - 1);
+    if (totalDemandM < minMorningsRequired) {
+      return {
+        success: false,
+        error: `La demanda total de mañanas (${totalDemandM} turnos) es insuficiente. Se requieren al menos ${minMorningsRequired} turnos de mañana para que el Empleado 1 trabaje 5 mañanas y cada uno de los restantes ${n - 1} empleados tenga al menos 1 turno de mañana.`,
+      };
+    }
+
     // Initialize matrix with null (unset)
     const matrix = Array.from({ length: n }, () => Array(7).fill(null));
     const offCount = Array(7).fill(0); // how many employees are off per day
 
-    // ---- PHASE 1: Emp 1 & 2 (index 0, 1) ----
-    // Key employees: restricted to Morning only and take off together on lowest demand days
+    // ---- PHASE 1: Emp 1 (index 0) ONLY ----
+    // Key employee: works strictly Morning on 5 working days and takes off on the 2 days of lowest demand
     const dayDemand = [];
     for (let d = 0; d < 7; d++) {
-      dayDemand[d] = { day: d, total: demandM[d] + demandT[d] };
+      dayDemand[d] = { day: d, total: demandM[d] + demandT[d], morning: demandM[d] };
     }
-    dayDemand.sort((a, b) => a.total - b.total);
-    const offDaysEmp12 = [dayDemand[0].day, dayDemand[1].day];
+    // Prioritize days with zero morning demand (so Emp 1 does not exceed 0 demand), then days with lowest total demand
+    dayDemand.sort((a, b) => {
+      if (a.morning === 0 && b.morning > 0) return -1;
+      if (b.morning === 0 && a.morning > 0) return 1;
+      return (a.total - b.total) || (a.morning - b.morning);
+    });
+    const offDaysEmp1 = [dayDemand[0].day, dayDemand[1].day];
 
-    for (const d of offDaysEmp12) {
+    for (const d of offDaysEmp1) {
       matrix[0][d] = 'L';
-      matrix[1][d] = 'L';
-      offCount[d] += 2;
+      offCount[d] += 1;
     }
 
-    // Emp 1 & 2 work Morning on their working days
+    // Emp 1 works Morning on their 5 working days
     for (let d = 0; d < 7; d++) {
-      if (matrix[0][d] === null) matrix[0][d] = 'M';
-      if (matrix[1][d] === null) matrix[1][d] = 'M';
+      if (matrix[0][d] === null) {
+        matrix[0][d] = 'M';
+      }
     }
 
-    // ---- PHASE 2: Distribute off days for Emp 3..N (indices 2 to n - 1) ----
+    // ---- PHASE 2: Distribute off days for Emp 2..N (indices 1 to n - 1) ----
     const maxRemainingOffPerDay = [];
     for (let d = 0; d < 7; d++) {
       const maxTotalOff = Math.max(0, n - (demandM[d] + demandT[d]));
       maxRemainingOffPerDay[d] = Math.max(0, maxTotalOff - offCount[d]);
     }
 
-    // Assign off days to remaining employees
+    // Assign off days to remaining employees (1 to n - 1)
     const offAssigned = Array(7).fill(0);
 
-    for (let emp = 2; emp < n; emp++) {
+    for (let emp = 1; emp < n; emp++) {
       let daysOff = 0;
       const candidates = [];
       for (let d = 0; d < 7; d++) {
@@ -267,36 +283,52 @@ const Scheduler = {
       }
     }
 
-    // ---- PHASE 3: Assign M/T for remaining employees ----
+    // ---- PHASE 3: Assign M/T for employees 1..n-1 with guaranteed >= 1 Morning ----
     const mCount = Array(n).fill(0);
     const tCount = Array(n).fill(0);
 
-    // Register shifts already assigned to Emp 1 & 2
-    for (let emp = 0; emp < 2; emp++) {
-      for (let d = 0; d < 7; d++) {
-        if (matrix[emp][d] === 'M') mCount[emp]++;
-      }
+    // Register shifts already assigned to Emp 1
+    for (let d = 0; d < 7; d++) {
+      if (matrix[0][d] === 'M') mCount[0]++;
     }
 
     // For each day, assign shifts to remaining employees
     for (let d = 0; d < 7; d++) {
-      // Accurately count morning and afternoon shifts already assigned on day d
-      let mAssigned = 0;
-      let tAssigned = 0;
-      for (let emp = 0; emp < 2; emp++) {
-        if (matrix[emp][d] === 'M') mAssigned++;
-        else if (matrix[emp][d] === 'T') tAssigned++;
-      }
+      let mAssigned = (matrix[0][d] === 'M') ? 1 : 0;
+      let tAssigned = (matrix[0][d] === 'T') ? 1 : 0;
 
       const workingEmps = [];
-      for (let emp = 2; emp < n; emp++) {
+      for (let emp = 1; emp < n; emp++) {
         if (matrix[emp][d] === null) {
           workingEmps.push(emp);
         }
       }
 
-      // Balance M and T: prioritize giving M to employees with fewer M relative to T
-      workingEmps.sort((a, b) => (mCount[a] - tCount[a]) - (mCount[b] - tCount[b]));
+      // Count remaining working days for an employee from day d to end of week
+      const remainingWorkingDays = (emp) => {
+        let count = 0;
+        for (let fd = d; fd < 7; fd++) {
+          if (matrix[emp][fd] === null) count++;
+        }
+        return count;
+      };
+
+      // Prioritize assigning M to:
+      // 1. Employees with 0 morning shifts so far (mCount === 0), ordered by urgency (fewest remaining working days)
+      // 2. Then employees with fewer M relative to T
+      workingEmps.sort((a, b) => {
+        const aNeedsM = (mCount[a] === 0) ? 1 : 0;
+        const bNeedsM = (mCount[b] === 0) ? 1 : 0;
+        if (aNeedsM !== bNeedsM) {
+          return bNeedsM - aNeedsM;
+        }
+        if (aNeedsM === 1) {
+          const remA = remainingWorkingDays(a);
+          const remB = remainingWorkingDays(b);
+          if (remA !== remB) return remA - remB;
+        }
+        return (mCount[a] - tCount[a]) - (mCount[b] - tCount[b]);
+      });
 
       for (const emp of workingEmps) {
         if (mAssigned < demandM[d]) {
@@ -322,8 +354,38 @@ const Scheduler = {
       }
     }
 
+    // Repair pass: Strictly guarantee every employee has at least 1 morning shift
+    for (let emp = 1; emp < n; emp++) {
+      if (mCount[emp] === 0) {
+        let swapped = false;
+        for (let d = 0; d < 7; d++) {
+          if (matrix[emp][d] === 'T') {
+            for (let emp2 = 1; emp2 < n; emp2++) {
+              if (matrix[emp2][d] === 'M' && mCount[emp2] > 1) {
+                matrix[emp][d] = 'M';
+                matrix[emp2][d] = 'T';
+                mCount[emp]++;
+                tCount[emp]--;
+                mCount[emp2]--;
+                tCount[emp2]++;
+                swapped = true;
+                break;
+              }
+            }
+            if (swapped) break;
+          }
+        }
+        if (!swapped) {
+          return {
+            success: false,
+            error: `No se pudo asignar al menos 1 turno de mañana al empleado ${employees[emp]}. Revisa la distribución de la demanda.`,
+          };
+        }
+      }
+    }
+
     // ---- PHASE 4: Ergonomic optimization (avoid T -> M transitions) ----
-    // Preserves strictly exact days off per employee and daily demand counts
+    // Preserves strictly exact days off per employee, daily demand counts, and min 1 morning per employee
     this._fixErgonomics(matrix, n);
 
     // Verify no nulls remain
@@ -349,8 +411,16 @@ const Scheduler = {
       return v;
     };
 
-    // Emp 1 & 2 are restricted to morning shifts only; eligible employees are index 2 to n-1
-    const eligibleStart = 2;
+    const countMornings = (emp) => {
+      let m = 0;
+      for (let d = 0; d < 7; d++) {
+        if (matrix[emp][d] === 'M') m++;
+      }
+      return m;
+    };
+
+    // Emp 1 (index 0) is restricted to morning shifts only; eligible employees are index 1 to n-1
+    const eligibleStart = 1;
 
     for (let pass = 0; pass < 5; pass++) {
       let improved = false;
@@ -361,7 +431,8 @@ const Scheduler = {
             for (let emp2 = eligibleStart; emp2 < n; emp2++) {
               if (emp1 === emp2) continue;
               // Both must be working shifts ('M' <-> 'T'), never touching 'L'
-              if (matrix[emp2][d] === 'M') {
+              // Critical: emp2 must have > 1 morning shift so swapping won't drop them to 0 morning shifts!
+              if (matrix[emp2][d] === 'M' && countMornings(emp2) > 1) {
                 const before = countViolations(emp1) + countViolations(emp2);
                 matrix[emp1][d] = 'M';
                 matrix[emp2][d] = 'T';
@@ -384,7 +455,8 @@ const Scheduler = {
             for (let emp2 = eligibleStart; emp2 < n; emp2++) {
               if (emp1 === emp2) continue;
               // Both must be working shifts ('M' <-> 'T'), never touching 'L'
-              if (matrix[emp2][d + 1] === 'T') {
+              // Critical: emp1 must have > 1 morning shift so swapping won't drop them to 0 morning shifts!
+              if (matrix[emp2][d + 1] === 'T' && countMornings(emp1) > 1) {
                 const before = countViolations(emp1) + countViolations(emp2);
                 matrix[emp1][d + 1] = 'T';
                 matrix[emp2][d + 1] = 'M';
@@ -451,8 +523,9 @@ const Renderer = {
     for (let i = 0; i < count; i++) {
       const div = document.createElement('div');
       div.className = 'form-group';
+      const keyNotice = (i === 0) ? ' <span style="font-size:0.75rem; color:var(--color-primary); font-weight:600;">(Clave - Solo Mañana)</span>' : '';
       div.innerHTML = `
-        <label for="emp-name-${i}">Empleado ${i + 1}</label>
+        <label for="emp-name-${i}">Empleado ${i + 1}${keyNotice}</label>
         <input type="text" id="emp-name-${i}" data-index="${i}"
                value="${savedNames && savedNames[i] ? this._escapeHtml(savedNames[i]) : `Empleado ${i + 1}`}"
                placeholder="Nombre del empleado">
@@ -870,6 +943,7 @@ const Auditor = {
     let totalDemandMismatches = 0;
     let totalOffdayMismatches = 0;
     let totalFatigueIssues = 0;
+    let totalMorningIssues = 0;
 
     // 1. Demand coverage check
     demandSummary.innerHTML = '';
@@ -895,7 +969,7 @@ const Auditor = {
       demandSummary.appendChild(tag);
     }
 
-    // 2. Offdays check (2 days off required)
+    // 2. Offdays & Morning Rules check
     offdaysSummary.innerHTML = '';
     const empStats = [];
     for (let e = 0; e < n; e++) {
@@ -908,10 +982,15 @@ const Auditor = {
         else if (s === 'M') countM++;
         else if (s === 'T') countT++;
       }
-      empStats.push({ name: employees[e], m: countM, t: countT, l: countL, hours: (countM + countT) * 8 });
+      const isKey = (e === 0);
+      empStats.push({ name: employees[e], m: countM, t: countT, l: countL, hours: (countM + countT) * 8, isKey });
 
       const is2Off = countL === 2;
       if (!is2Off) totalOffdayMismatches++;
+
+      // Rule checks: Emp 1 must only work morning; everyone needs >= 1 morning
+      if (isKey && countT > 0) totalMorningIssues++;
+      if (countM === 0) totalMorningIssues++;
 
       const tag = document.createElement('span');
       let statusClass = is2Off ? 'ok' : (countL < 2 ? 'err' : 'warn');
@@ -948,15 +1027,16 @@ const Auditor = {
     }
 
     // 4. Global Badge
-    if (totalDemandMismatches === 0 && totalOffdayMismatches === 0 && totalFatigueIssues === 0) {
+    if (totalDemandMismatches === 0 && totalOffdayMismatches === 0 && totalFatigueIssues === 0 && totalMorningIssues === 0) {
       globalBadge.className = 'badge badge--success';
       globalBadge.textContent = 'Balance Óptimo ✅';
-    } else if (totalDemandMismatches > 0 || totalOffdayMismatches > 0) {
+    } else if (totalDemandMismatches > 0 || totalOffdayMismatches > 0 || totalMorningIssues > 0) {
       globalBadge.className = 'badge badge--danger';
       const issues = [];
       if (totalDemandMismatches > 0) issues.push('Demanda');
       if (totalOffdayMismatches > 0) issues.push('Días libres');
-      globalBadge.textContent = `Ajuste requerido: ${issues.join(' y ')} ⚠️`;
+      if (totalMorningIssues > 0) issues.push('Regla de mañanas');
+      globalBadge.textContent = `Ajuste requerido: ${issues.join(' · ')} ⚠️`;
     } else {
       globalBadge.className = 'badge badge--warning';
       globalBadge.textContent = `${totalFatigueIssues} aviso(s) ergonómico(s) T → M ⚠️`;
@@ -966,10 +1046,15 @@ const Auditor = {
     if (equityContainer) {
       let html = '<table class="equity-table"><thead><tr><th>Empleado</th><th>Turnos Mañana</th><th>Turnos Tarde</th><th>Días Libres</th><th>Horas Semanales</th></tr></thead><tbody>';
       empStats.forEach(stat => {
+        const mNotice = stat.m === 0 ? ' <span title="Se requiere al menos 1 turno de mañana" style="color:var(--color-danger); font-size:0.75rem;">⚠️ Mín. 1 M</span>' : '';
+        const tNotice = (stat.isKey && stat.t > 0) ? ' <span title="El empleado clave debe ser solo mañana" style="color:var(--color-danger); font-size:0.75rem;">⚠️ Solo M</span>' : '';
+        const nameText = stat.isKey
+          ? `${Renderer._escapeHtml(stat.name)} <span style="font-size:0.75rem; color:var(--text-muted); font-weight:normal;">(Clave)</span>`
+          : Renderer._escapeHtml(stat.name);
         html += `<tr>
-          <td style="font-weight:600; text-align:left;">${Renderer._escapeHtml(stat.name)}</td>
-          <td><span style="color:var(--color-morning); font-weight:700;">${stat.m}</span></td>
-          <td><span style="color:var(--color-afternoon); font-weight:700;">${stat.t}</span></td>
+          <td style="font-weight:600; text-align:left;">${nameText}</td>
+          <td><span style="color:var(--color-morning); font-weight:700;">${stat.m}</span>${mNotice}</td>
+          <td><span style="color:var(--color-afternoon); font-weight:700;">${stat.t}</span>${tNotice}</td>
           <td><span style="color:var(--color-free); font-weight:700;">${stat.l}</span></td>
           <td><strong>${stat.hours} h</strong></td>
         </tr>`;
