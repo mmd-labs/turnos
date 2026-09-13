@@ -32,28 +32,29 @@
 }
 
 [data-theme="dark"] {
+  color-scheme: dark;
   --color-primary: #3b82f6;
   --color-primary-hover: #60a5fa;
   --color-primary-light: #1e293b;
-  --color-morning: #60a5fa;
-  --color-morning-bg: #1e293b;
-  --color-afternoon: #fb923c;
-  --color-afternoon-bg: #2a1f18;
-  --color-free: #9ca3af;
-  --color-free-bg: #1f2937;
-  --color-danger: #ef4444;
-  --color-danger-bg: #2d1515;
-  --color-warning: #f59e0b;
-  --color-warning-bg: #2c2010;
-  --color-success: #22c55e;
-  --color-success-bg: #14281a;
+  --color-morning: #93c5fd;
+  --color-morning-bg: #1e3a8a;
+  --color-afternoon: #fdba74;
+  --color-afternoon-bg: #431407;
+  --color-free: #e2e8f0;
+  --color-free-bg: #334155;
+  --color-danger: #f87171;
+  --color-danger-bg: #450a0a;
+  --color-warning: #fbbf24;
+  --color-warning-bg: #451a03;
+  --color-success: #4ade80;
+  --color-success-bg: #052e16;
   --color-text: #f9fafb;
-  --color-text-secondary: #9ca3af;
-  --color-border: #374151;
+  --color-text-secondary: #cbd5e1;
+  --color-border: #475569;
   --color-bg: #0f172a;
   --color-surface: #1e293b;
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
 
 *, *::before, *::after {
@@ -69,6 +70,17 @@ body {
   line-height: 1.6;
   min-height: 100vh;
   transition: background-color var(--transition), color var(--transition);
+}
+
+input, select, textarea {
+  color: var(--color-text);
+  background-color: var(--color-surface);
+  font-family: inherit;
+}
+
+input::placeholder, textarea::placeholder {
+  color: var(--color-text-secondary);
+  opacity: 0.85;
 }
 
 /* ============================================
@@ -112,7 +124,8 @@ body {
 }
 
 .btn-outline:hover:not(:disabled) {
-  background: var(--color-bg);
+  background: var(--color-primary-light);
+  border-color: var(--color-primary);
 }
 
 .btn-lg {
@@ -143,8 +156,15 @@ body {
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
   font-size: 0.9375rem;
-  transition: border-color var(--transition), box-shadow var(--transition);
+  font-weight: 500;
+  color: var(--color-text);
   background: var(--color-surface);
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+[data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1) brightness(1.2);
+  cursor: pointer;
 }
 
 .form-group input:focus {
@@ -235,10 +255,10 @@ body {
 }
 
 .demand-table th {
-  background: var(--color-bg);
-  font-weight: 600;
+  background: var(--color-surface);
+  font-weight: 700;
   font-size: 0.8125rem;
-  color: var(--color-text-secondary);
+  color: var(--color-text);
   text-transform: uppercase;
   letter-spacing: 0.025em;
 }
@@ -266,7 +286,9 @@ body {
   border-radius: 4px;
   text-align: center;
   font-size: 0.9375rem;
-  font-weight: 500;
+  font-weight: 600;
+  color: var(--color-text);
+  background: var(--color-surface);
 }
 
 .demand-input:focus {
@@ -309,7 +331,7 @@ body {
 }
 
 .schedule-table thead th {
-  background: var(--color-bg);
+  background: var(--color-surface);
   padding: 0.75rem 0.5rem;
   text-align: center;
   vertical-align: middle;
@@ -321,9 +343,9 @@ body {
   font-size: 0.8125rem;
   font-weight: 700;
   text-transform: uppercase;
-  color: var(--color-text-secondary);
+  color: var(--color-text);
   letter-spacing: 0.03em;
-  background: var(--color-bg);
+  background: var(--color-surface);
 }
 
 .day-col-header {
@@ -384,6 +406,22 @@ body {
   background-color: #fbfbfb;
 }
 
+[data-theme="dark"] .shift-cell {
+  background-color: #0f172a;
+}
+
+[data-theme="dark"] .shift-cell--morning {
+  background-color: rgba(30, 58, 138, 0.25);
+}
+
+[data-theme="dark"] .shift-cell--afternoon {
+  background-color: rgba(67, 20, 7, 0.35);
+}
+
+[data-theme="dark"] .shift-cell--free {
+  background-color: rgba(15, 23, 42, 0.8);
+}
+
 .employee-pill-list {
   display: flex;
   flex-direction: column;
@@ -401,6 +439,7 @@ body {
   border-radius: var(--radius);
   box-shadow: var(--shadow-sm);
   transition: all var(--transition);
+  color: var(--color-text);
 }
 
 .employee-pill--morning {
@@ -413,7 +452,8 @@ body {
 
 .employee-pill--free {
   border-left: 3px solid var(--color-free);
-  color: var(--color-text-secondary);
+  color: var(--color-text);
+  opacity: 0.9;
 }
 
 .employee-pill-name {
@@ -422,6 +462,7 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  color: var(--color-text);
 }
 
 .employee-shift-select {
@@ -430,7 +471,7 @@ body {
   border-radius: 4px;
   font-size: 0.75rem;
   font-weight: 700;
-  background: var(--color-bg);
+  background: var(--color-surface);
   cursor: pointer;
   color: var(--color-text);
   line-height: 1;
@@ -447,7 +488,7 @@ body {
   color: var(--color-text-secondary);
   font-size: 0.875rem;
   padding: 0.5rem 0;
-  opacity: 0.4;
+  opacity: 0.7;
 }
 
 /* ============================================
@@ -768,7 +809,7 @@ body {
 .audit-card h4 {
   font-size: 0.8125rem;
   font-weight: 700;
-  color: var(--color-text-secondary);
+  color: var(--color-text);
   margin-bottom: 0.6rem;
   text-transform: uppercase;
   letter-spacing: 0.03em;
@@ -806,6 +847,42 @@ body {
   border-color: rgba(239, 68, 68, 0.25);
 }
 
+[data-theme="dark"] .badge--success {
+  background: #064e3b;
+  color: #86efac;
+  border-color: #10b981;
+}
+
+[data-theme="dark"] .badge--warning {
+  background: #451a03;
+  color: #fcd34d;
+  border-color: #f59e0b;
+}
+
+[data-theme="dark"] .badge--danger {
+  background: #450a0a;
+  color: #fca5a5;
+  border-color: #ef4444;
+}
+
+[data-theme="dark"] .audit-tag--ok {
+  background: #064e3b;
+  color: #86efac;
+  border-color: rgba(134, 239, 172, 0.35);
+}
+
+[data-theme="dark"] .audit-tag--warn {
+  background: #451a03;
+  color: #fcd34d;
+  border-color: rgba(252, 211, 77, 0.35);
+}
+
+[data-theme="dark"] .audit-tag--err {
+  background: #450a0a;
+  color: #fca5a5;
+  border-color: rgba(252, 165, 165, 0.35);
+}
+
 .equity-details {
   margin-top: 1rem;
   border-top: 1px solid var(--color-border);
@@ -837,9 +914,9 @@ body {
 }
 
 .equity-table th {
-  background: var(--color-bg);
-  font-weight: 600;
-  color: var(--color-text-secondary);
+  background: var(--color-surface);
+  font-weight: 700;
+  color: var(--color-text);
 }
 
 /* ============================================
@@ -939,7 +1016,7 @@ body {
 .indiv-day-name {
   font-size: 0.75rem;
   font-weight: 700;
-  color: var(--color-text-secondary);
+  color: var(--color-text);
   text-transform: uppercase;
 }
 
