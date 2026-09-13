@@ -1,0 +1,21 @@
+[build]
+  publish = "."
+
+# Cabeceras de seguridad y políticas de caché
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+# Control de caché para asegurar que cambios en JS/CSS se sirvan inmediatamente
+[[headers]]
+  for = "*.js"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "*.css"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
