@@ -639,9 +639,12 @@ const Renderer = {
    MODULE: Exporter
    ============================================ */
 const Exporter = {
-  async exportToPDF() {
+  async exportToPDF(weekStart) {
     const container = document.getElementById('pdf-container');
     if (!container) return;
+
+    const startDate = weekStart || (Renderer && Renderer.weekStartInput ? Renderer.weekStartInput.value : '');
+    const filename = startDate ? `cuadrante-${startDate}.pdf` : 'cuadrante.pdf';
 
     const btnExport = document.getElementById('btn-export');
     const originalText = btnExport ? btnExport.textContent : '';
@@ -652,7 +655,7 @@ const Exporter = {
 
     const opt = {
       margin: [8, 8, 8, 8],
-      filename: 'cuadrante-turnos.pdf',
+      filename: filename,
       image: { type: 'jpeg', quality: 0.98 },
       html2canvas: {
         scale: 2,
@@ -773,7 +776,7 @@ const App = {
       const names = Renderer.getEmployeeNames();
       const weekStart = Renderer.weekStartInput.value;
       Renderer.renderPDF(matrix, names, weekStart);
-      Exporter.exportToPDF();
+      Exporter.exportToPDF(weekStart);
     });
 
     // Load saved schedule on startup if available
