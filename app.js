@@ -3,6 +3,11 @@
    ============================================ */
 const STORAGE_KEYS = {
   NAMES: 'turnos_employee_names',
+  PATTERNS: 'turnos_employee_patterns',
+  SHIFT_MODES: 'turnos_employee_shift_modes',
+  BASE_WEEK: 'turnos_pattern_base_week',
+  GENERATED_WEEKS: 'turnos_generated_weeks',
+  WEEKS_COUNT: 'turnos_weeks_count',
   CONFIG: 'turnos_config',
   SCHEDULE: 'turnos_schedule',
   SCHEDULE_WEEK_PREFIX: 'turnos_schedule_',
@@ -24,6 +29,38 @@ const DEFAULT_EMPLOYEE_NAMES = [
   'Ashley',
   'Idaira',
   'Scarleth',
+];
+
+const ROTATING_OFF_PATTERN = [
+  { week: 1, days: [0, 1], label: 'Lun - Mar' },
+  { week: 2, days: [1, 2], label: 'Mar - Mié' },
+  { week: 3, days: [2, 3], label: 'Mié - Jue' },
+  { week: 4, days: [3, 4], label: 'Jue - Vie' },
+  { week: 5, days: [4, 5], label: 'Vie - Sáb' },
+  { week: 6, days: [5, 6], label: 'Sáb - Dom' },
+  { week: 7, days: [6, 0], label: 'Dom - Lun' },
+];
+
+const DEFAULT_EMPLOYEE_PATTERNS = [
+  6, // Mar: Semana 6 (Sábado - Domingo)
+  1, // Clary: Semana 1 (Lunes - Martes)
+  2, // Estrella: Semana 2 (Martes - Miércoles)
+  3, // Lidia: Semana 3 (Miércoles - Jueves)
+  4, // Melody: Semana 4 (Jueves - Viernes)
+  5, // Ashley: Semana 5 (Viernes - Sábado)
+  6, // Idaira: Semana 6 (Sábado - Domingo)
+  7, // Scarleth: Semana 7 (Domingo - Lunes)
+];
+
+const DEFAULT_EMPLOYEE_SHIFT_MODES = [
+  '5M0T', // Mar: fija solo mañanas
+  '3M2T', // Clary: 3M/2T semana 1 -> 2M/3T semana 2
+  '2M3T', // Estrella: 2M/3T semana 1 -> 3M/2T semana 2
+  '3M2T', // Lidia: 3M/2T semana 1 -> 2M/3T semana 2
+  '2M3T', // Melody: 2M/3T semana 1 -> 3M/2T semana 2
+  '3M2T', // Ashley: 3M/2T semana 1 -> 2M/3T semana 2
+  '2M3T', // Idaira: 2M/3T semana 1 -> 3M/2T semana 2
+  '3M2T', // Scarleth: 3M/2T semana 1 -> 2M/3T semana 2
 ];
 
 const CONSECUTIVE_PAIRS = [
@@ -138,6 +175,59 @@ const Storage = {
     }
   },
 
+  savePatterns(patterns) {
+    localStorage.setItem(STORAGE_KEYS.PATTERNS, JSON.stringify(patterns));
+  },
+
+  loadPatterns() {
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE_KEYS.PATTERNS));
+    } catch {
+      return null;
+    }
+  },
+
+  saveShiftModes(modes) {
+    localStorage.setItem(STORAGE_KEYS.SHIFT_MODES, JSON.stringify(modes));
+  },
+
+  loadShiftModes() {
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE_KEYS.SHIFT_MODES));
+    } catch {
+      return null;
+    }
+  },
+
+  saveBaseWeek(weekStr) {
+    localStorage.setItem(STORAGE_KEYS.BASE_WEEK, weekStr);
+  },
+
+  loadBaseWeek() {
+    return localStorage.getItem(STORAGE_KEYS.BASE_WEEK);
+  },
+
+  saveGeneratedWeeks(weeks) {
+    localStorage.setItem(STORAGE_KEYS.GENERATED_WEEKS, JSON.stringify(weeks));
+  },
+
+  loadGeneratedWeeks() {
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE_KEYS.GENERATED_WEEKS)) || [];
+    } catch {
+      return [];
+    }
+  },
+
+  saveWeeksCount(count) {
+    localStorage.setItem(STORAGE_KEYS.WEEKS_COUNT, String(count));
+  },
+
+  loadWeeksCount() {
+    const val = localStorage.getItem(STORAGE_KEYS.WEEKS_COUNT);
+    return val ? parseInt(val) : 4;
+  },
+
   saveSchedule(schedule, weekStart) {
     localStorage.setItem(STORAGE_KEYS.SCHEDULE, JSON.stringify(schedule));
     if (weekStart) {
@@ -178,7 +268,7 @@ const Scheduler = {
    * Returns { success: boolean, matrix: Array, error: string }
    * matrix[empIndex][dayIndex] = 'M' | 'T' | 'L'
    */
-  generate(employees, demand) {
+  generate(employees, demand, options = {}) {
     const n = employees.length;
     if (n < MIN_EMPLOYEES) {
       return { success: false, error: `Se necesitan al menos ${MIN_EMPLOYEES} empleados.` };
@@ -230,132 +320,103 @@ const Scheduler = {
     const matrix = Array.from({ length: n }, () => Array(7).fill(null));
     const offCount = Array(7).fill(0); // how many employees are off per day
 
-    // ---- PHASE 1: Emp 1 (index 0) ONLY ----
-    // Key employee: works strictly Morning on 5 working days and takes off on the 2 consecutive days of lowest combined demand
-    const candidatePairs = [];
-    for (let p = 0; p < CONSECUTIVE_PAIRS.length; p++) {
-      const [d1, d2] = CONSECUTIVE_PAIRS[p];
-      let canWorkMornings = true;
-      for (let d = 0; d < 7; d++) {
-        if (d !== d1 && d !== d2 && demandM[d] < 1) {
-          canWorkMornings = false;
-          break;
-        }
-      }
-      const combinedDemand = (demandM[d1] + demandT[d1]) + (demandM[d2] + demandT[d2]);
-      const combinedMorning = demandM[d1] + demandM[d2];
-      const isWeekend = (p === 5 || p === 6) ? 1 : 0;
-      candidatePairs.push({ p, d1, d2, combinedDemand, combinedMorning, isWeekend, canWorkMornings });
+    // Determine pattern weeks for each employee
+    const patternWeeks = (options && options.patternWeeks && options.patternWeeks.length >= n)
+      ? options.patternWeeks
+      : Array.from({ length: n }, (_, i) => DEFAULT_EMPLOYEE_PATTERNS[i] || ((i % 7) + 1));
+
+    // ---- PHASE 1 & 2: Assign CONSECUTIVE days off (L) following the 7-week rotating pattern ----
+    for (let emp = 0; emp < n; emp++) {
+      const pWeek = patternWeeks[emp] || ((emp % 7) + 1);
+      const patternItem = ROTATING_OFF_PATTERN[(pWeek - 1) % 7] || ROTATING_OFF_PATTERN[0];
+      const [d1, d2] = patternItem.days;
+      matrix[emp][d1] = 'L';
+      matrix[emp][d2] = 'L';
+      offCount[d1] += 1;
+      offCount[d2] += 1;
     }
 
-    candidatePairs.sort((a, b) => {
-      if (a.canWorkMornings !== b.canWorkMornings) return b.canWorkMornings ? 1 : -1;
-      if (a.combinedDemand !== b.combinedDemand) return a.combinedDemand - b.combinedDemand;
-      if (a.combinedMorning !== b.combinedMorning) return a.combinedMorning - b.combinedMorning;
-      return b.isWeekend - a.isWeekend;
-    });
-
-    const bestEmp1Pair = CONSECUTIVE_PAIRS[candidatePairs[0].p];
-    matrix[0][bestEmp1Pair[0]] = 'L';
-    matrix[0][bestEmp1Pair[1]] = 'L';
-    offCount[bestEmp1Pair[0]] += 1;
-    offCount[bestEmp1Pair[1]] += 1;
-
-    // Emp 1 works Morning on their 5 working days
+    // Emp 1 (index 0 - Clave): works strictly Morning on their 5 working days
     for (let d = 0; d < 7; d++) {
       if (matrix[0][d] === null) {
         matrix[0][d] = 'M';
       }
     }
 
-    // ---- PHASE 2: Distribute CONSECUTIVE off days for Emp 2..N (indices 1 to n - 1) ----
-    const targetOff = [];
-    for (let d = 0; d < 7; d++) {
-      const maxTotalOff = Math.max(0, n - (demandM[d] + demandT[d]));
-      targetOff[d] = Math.max(0, maxTotalOff - offCount[d]);
+    // Determine shift targets for each employee:
+    // Emp 0 (Mar - Clave): strictly 5M / 0T
+    // Emps 1..n-1: alternating 3M/2T and 2M/3T as provided in options.shiftTargets
+    let shiftTargets = options && options.shiftTargets;
+    if (!shiftTargets || shiftTargets.length < n) {
+      shiftTargets = Array.from({ length: n }, (_, i) => {
+        if (i === 0) return { m: 5, t: 0 };
+        return (i % 2 === 1) ? { m: 3, t: 2 } : { m: 2, t: 3 };
+      });
     }
 
-    const pairCounts = this._solveConsecutiveOffCounts(n - 1, targetOff);
-
-    const pairsToAssign = [];
-    for (let p = 0; p < CONSECUTIVE_PAIRS.length; p++) {
-      const count = pairCounts[p] || 0;
-      for (let c = 0; c < count; c++) {
-        pairsToAssign.push(CONSECUTIVE_PAIRS[p]);
-      }
-    }
-
-    while (pairsToAssign.length < n - 1) {
-      pairsToAssign.push(CONSECUTIVE_PAIRS[0]);
-    }
-
-    for (let emp = 1; emp < n; emp++) {
-      const pair = pairsToAssign[emp - 1];
-      matrix[emp][pair[0]] = 'L';
-      matrix[emp][pair[1]] = 'L';
-      offCount[pair[0]] += 1;
-      offCount[pair[1]] += 1;
-    }
-
-    // ---- PHASE 3: Assign M/T for employees 1..n-1 with guaranteed >= 1 Morning ----
+    // ---- PHASE 3: Assign M/T for employees 1..n-1 with guaranteed shiftTargets ----
     const mCount = Array(n).fill(0);
     const tCount = Array(n).fill(0);
 
-    // Register shifts already assigned to Emp 1
     for (let d = 0; d < 7; d++) {
       if (matrix[0][d] === 'M') mCount[0]++;
     }
 
-    // For each day, assign shifts to remaining employees
+    // Count remaining working days for an employee from day d to end of week
+    const remWork = (emp, fromDay) => {
+      let cnt = 0;
+      for (let fd = fromDay; fd < 7; fd++) {
+        if (matrix[emp][fd] === null) cnt++;
+      }
+      return cnt;
+    };
+
     for (let d = 0; d < 7; d++) {
       let mAssigned = (matrix[0][d] === 'M') ? 1 : 0;
-      let tAssigned = (matrix[0][d] === 'T') ? 1 : 0;
+      let tAssigned = 0;
 
       const workingEmps = [];
       for (let emp = 1; emp < n; emp++) {
-        if (matrix[emp][d] === null) {
-          workingEmps.push(emp);
-        }
+        if (matrix[emp][d] === null) workingEmps.push(emp);
       }
 
-      // Count remaining working days for an employee from day d to end of week
-      const remainingWorkingDays = (emp) => {
-        let count = 0;
-        for (let fd = d; fd < 7; fd++) {
-          if (matrix[emp][fd] === null) count++;
-        }
-        return count;
-      };
-
-      // Prioritize assigning M to:
-      // 1. Employees with 0 morning shifts so far (mCount === 0), ordered by urgency (fewest remaining working days)
-      // 2. Then employees with fewer M relative to T
+      // Prioritize assigning M:
+      // Urgency = slack = remainingWorkingDays - (targetM - currentM)
       workingEmps.sort((a, b) => {
-        const aNeedsM = (mCount[a] === 0) ? 1 : 0;
-        const bNeedsM = (mCount[b] === 0) ? 1 : 0;
-        if (aNeedsM !== bNeedsM) {
-          return bNeedsM - aNeedsM;
+        const neededA = Math.max(0, shiftTargets[a].m - mCount[a]);
+        const neededB = Math.max(0, shiftTargets[b].m - mCount[b]);
+        if (neededA > 0 && neededB === 0) return -1;
+        if (neededB > 0 && neededA === 0) return 1;
+        if (neededA > 0 && neededB > 0) {
+          const slackA = remWork(a, d) - neededA;
+          const slackB = remWork(b, d) - neededB;
+          if (slackA !== slackB) return slackA - slackB;
         }
-        if (aNeedsM === 1) {
-          const remA = remainingWorkingDays(a);
-          const remB = remainingWorkingDays(b);
-          if (remA !== remB) return remA - remB;
-        }
-        return (mCount[a] - tCount[a]) - (mCount[b] - tCount[b]);
+        return (shiftTargets[b].m - mCount[b]) - (shiftTargets[a].m - mCount[a]);
       });
 
       for (const emp of workingEmps) {
-        if (mAssigned < demandM[d]) {
+        const needsM = mCount[emp] < shiftTargets[emp].m;
+        const needsT = tCount[emp] < shiftTargets[emp].t;
+
+        if (needsM && mAssigned < demandM[d]) {
           matrix[emp][d] = 'M';
           mCount[emp]++;
           mAssigned++;
-        } else if (tAssigned < demandT[d]) {
+        } else if (needsT && tAssigned < demandT[d]) {
+          matrix[emp][d] = 'T';
+          tCount[emp]++;
+          tAssigned++;
+        } else if (needsM) {
+          matrix[emp][d] = 'M';
+          mCount[emp]++;
+          mAssigned++;
+        } else if (needsT) {
           matrix[emp][d] = 'T';
           tCount[emp]++;
           tAssigned++;
         } else {
-          // Extra workers beyond exact demand: assign to balance employee workload
-          if (mCount[emp] <= tCount[emp]) {
+          if (mAssigned < demandM[d]) {
             matrix[emp][d] = 'M';
             mCount[emp]++;
             mAssigned++;
@@ -368,38 +429,35 @@ const Scheduler = {
       }
     }
 
-    // Repair pass: Strictly guarantee every employee has at least 1 morning shift
-    for (let emp = 1; emp < n; emp++) {
-      if (mCount[emp] === 0) {
-        let swapped = false;
-        for (let d = 0; d < 7; d++) {
-          if (matrix[emp][d] === 'T') {
-            for (let emp2 = 1; emp2 < n; emp2++) {
-              if (matrix[emp2][d] === 'M' && mCount[emp2] > 1) {
-                matrix[emp][d] = 'M';
-                matrix[emp2][d] = 'T';
-                mCount[emp]++;
-                tCount[emp]--;
-                mCount[emp2]--;
-                tCount[emp2]++;
-                swapped = true;
-                break;
+    // Repair pass: Strictly guarantee every employee reaches shiftTargets[emp].m
+    for (let pass = 0; pass < 10; pass++) {
+      let improved = false;
+      for (let e1 = 1; e1 < n; e1++) {
+        if (mCount[e1] < shiftTargets[e1].m) {
+          for (let d = 0; d < 7; d++) {
+            if (matrix[e1][d] === 'T') {
+              for (let e2 = 1; e2 < n; e2++) {
+                if (e1 !== e2 && matrix[e2][d] === 'M' && mCount[e2] > shiftTargets[e2].m) {
+                  matrix[e1][d] = 'M';
+                  matrix[e2][d] = 'T';
+                  mCount[e1]++;
+                  tCount[e1]--;
+                  mCount[e2]--;
+                  tCount[e2]++;
+                  improved = true;
+                  break;
+                }
               }
+              if (mCount[e1] === shiftTargets[e1].m) break;
             }
-            if (swapped) break;
           }
         }
-        if (!swapped) {
-          return {
-            success: false,
-            error: `No se pudo asignar al menos 1 turno de mañana al empleado ${employees[emp]}. Revisa la distribución de la demanda.`,
-          };
-        }
       }
+      if (!improved) break;
     }
 
     // ---- PHASE 4: Ergonomic optimization (avoid T -> M transitions) ----
-    // Preserves strictly exact days off per employee, daily demand counts, and min 1 morning per employee
+    // Uses reciprocal swaps preserving exact shiftTargets and daily demand
     this._fixErgonomics(matrix, n);
 
     // Verify no nulls remain
@@ -425,14 +483,6 @@ const Scheduler = {
       return v;
     };
 
-    const countMornings = (emp) => {
-      let m = 0;
-      for (let d = 0; d < 7; d++) {
-        if (matrix[emp][d] === 'M') m++;
-      }
-      return m;
-    };
-
     // Emp 1 (index 0) is restricted to morning shifts only; eligible employees are index 1 to n-1
     const eligibleStart = 1;
 
@@ -441,38 +491,15 @@ const Scheduler = {
       for (let emp1 = eligibleStart; emp1 < n; emp1++) {
         for (let d = 0; d < 6; d++) {
           if (matrix[emp1][d] === 'T' && matrix[emp1][d + 1] === 'M') {
-            // Attempt 1: Swap shift on day d with another employee who works 'M' on day d
+            // Reciprocal 2-day swap: emp1 (T at d, M at d+1), emp2 (M at d, T at d+1)
+            // Preserves exact mCount and tCount for BOTH employees without altering daily demands!
             for (let emp2 = eligibleStart; emp2 < n; emp2++) {
               if (emp1 === emp2) continue;
-              // Both must be working shifts ('M' <-> 'T'), never touching 'L'
-              // Critical: emp2 must have > 1 morning shift so swapping won't drop them to 0 morning shifts!
-              if (matrix[emp2][d] === 'M' && countMornings(emp2) > 1) {
+              if (matrix[emp2][d] === 'M' && matrix[emp2][d + 1] === 'T') {
                 const before = countViolations(emp1) + countViolations(emp2);
                 matrix[emp1][d] = 'M';
-                matrix[emp2][d] = 'T';
-                const after = countViolations(emp1) + countViolations(emp2);
-
-                if (after < before) {
-                  improved = true;
-                  break;
-                } else {
-                  // Revert swap
-                  matrix[emp1][d] = 'T';
-                  matrix[emp2][d] = 'M';
-                }
-              }
-            }
-
-            if (improved) break;
-
-            // Attempt 2: Swap shift on day d+1 with another employee who works 'T' on day d+1
-            for (let emp2 = eligibleStart; emp2 < n; emp2++) {
-              if (emp1 === emp2) continue;
-              // Both must be working shifts ('M' <-> 'T'), never touching 'L'
-              // Critical: emp1 must have > 1 morning shift so swapping won't drop them to 0 morning shifts!
-              if (matrix[emp2][d + 1] === 'T' && countMornings(emp1) > 1) {
-                const before = countViolations(emp1) + countViolations(emp2);
                 matrix[emp1][d + 1] = 'T';
+                matrix[emp2][d] = 'T';
                 matrix[emp2][d + 1] = 'M';
                 const after = countViolations(emp1) + countViolations(emp2);
 
@@ -481,7 +508,9 @@ const Scheduler = {
                   break;
                 } else {
                   // Revert swap
+                  matrix[emp1][d] = 'T';
                   matrix[emp1][d + 1] = 'M';
+                  matrix[emp2][d] = 'M';
                   matrix[emp2][d + 1] = 'T';
                 }
               }
@@ -489,9 +518,10 @@ const Scheduler = {
 
             if (improved) break;
           }
+          if (improved) break;
         }
+        if (improved) break;
       }
-
       if (!improved) break;
     }
   },
@@ -602,30 +632,202 @@ const Renderer = {
     this.weekStartInput.value = this._formatDate(nextMonday);
   },
 
+  _getWeeksDiff(dateStr1, dateStr2) {
+    if (!dateStr1 || !dateStr2) return 0;
+    const m1 = this.getMonday(dateStr1);
+    const m2 = this.getMonday(dateStr2);
+    if (!m1 || !m2) return 0;
+    const utc1 = Date.UTC(m1.getFullYear(), m1.getMonth(), m1.getDate());
+    const utc2 = Date.UTC(m2.getFullYear(), m2.getMonth(), m2.getDate());
+    const msPerWeek = 7 * 24 * 60 * 60 * 1000;
+    return Math.round((utc2 - utc1) / msPerWeek);
+  },
+
+  getEffectivePatternWeek(empIndex, weekStartStr) {
+    const baseWeek = Storage.loadBaseWeek() || (this.weekStartInput ? this.weekStartInput.value : '');
+    const savedPatterns = Storage.loadPatterns() || [];
+    const basePattern = savedPatterns[empIndex] || DEFAULT_EMPLOYEE_PATTERNS[empIndex] || ((empIndex % 7) + 1);
+    if (!baseWeek || !weekStartStr) return basePattern;
+    const diffWeeks = this._getWeeksDiff(baseWeek, weekStartStr);
+    return (((basePattern - 1 + diffWeeks) % 7) + 7) % 7 + 1;
+  },
+
+  getEffectivePatternWeeks(weekStartStr) {
+    const count = parseInt(this.employeeCountInput ? this.employeeCountInput.value : DEFAULT_EMPLOYEES) || DEFAULT_EMPLOYEES;
+    const weeks = [];
+    for (let i = 0; i < count; i++) {
+      weeks.push(this.getEffectivePatternWeek(i, weekStartStr));
+    }
+    return weeks;
+  },
+
+  setEmployeePatternForWeek(empIndex, effectiveWeek, weekStartStr) {
+    const baseWeek = Storage.loadBaseWeek() || weekStartStr || (this.weekStartInput ? this.weekStartInput.value : '');
+    if (!Storage.loadBaseWeek() && baseWeek) {
+      Storage.saveBaseWeek(baseWeek);
+    }
+    const currentPatterns = Storage.loadPatterns() || [...DEFAULT_EMPLOYEE_PATTERNS];
+    while (currentPatterns.length <= empIndex) {
+      currentPatterns.push(((currentPatterns.length % 7) + 1));
+    }
+    const diffWeeks = this._getWeeksDiff(baseWeek, weekStartStr);
+    const newBasePattern = (((effectiveWeek - 1 - diffWeeks) % 7) + 7) % 7 + 1;
+    currentPatterns[empIndex] = newBasePattern;
+    Storage.savePatterns(currentPatterns);
+  },
+
+  getEffectiveShiftMode(empIndex, weekStartStr) {
+    if (empIndex === 0) return '5M0T';
+    const baseWeek = Storage.loadBaseWeek() || (this.weekStartInput ? this.weekStartInput.value : '');
+    const savedModes = Storage.loadShiftModes() || DEFAULT_EMPLOYEE_SHIFT_MODES;
+    let baseMode = savedModes[empIndex] || DEFAULT_EMPLOYEE_SHIFT_MODES[empIndex] || ((empIndex % 2 === 1) ? '3M2T' : '2M3T');
+    if (baseMode === '5M0T' && empIndex > 0) {
+      baseMode = (empIndex % 2 === 1) ? '3M2T' : '2M3T';
+    }
+    if (!baseWeek || !weekStartStr) return baseMode;
+    const diffWeeks = this._getWeeksDiff(baseWeek, weekStartStr);
+    if (Math.abs(diffWeeks) % 2 === 0) {
+      return baseMode;
+    } else {
+      return baseMode === '3M2T' ? '2M3T' : '3M2T';
+    }
+  },
+
+  getEffectiveShiftTargets(weekStartStr) {
+    const count = parseInt(this.employeeCountInput ? this.employeeCountInput.value : DEFAULT_EMPLOYEES) || DEFAULT_EMPLOYEES;
+    const targets = [];
+    for (let i = 0; i < count; i++) {
+      const mode = this.getEffectiveShiftMode(i, weekStartStr);
+      if (mode === '5M0T') {
+        targets.push({ m: 5, t: 0, mode });
+      } else if (mode === '3M2T') {
+        targets.push({ m: 3, t: 2, mode });
+      } else {
+        targets.push({ m: 2, t: 3, mode });
+      }
+    }
+    return targets;
+  },
+
+  renderGeneratedWeeksNav(weeks, currentWeek) {
+    const nav = document.getElementById('generated-weeks-nav');
+    if (!nav) return;
+    if (!weeks || weeks.length <= 1) {
+      nav.hidden = true;
+      nav.innerHTML = '';
+      return;
+    }
+    nav.hidden = false;
+    nav.innerHTML = weeks.map((w, idx) => {
+      const dates = this._getDayDates(w);
+      const startStr = `${dates[0].date.split('/')[0]}/${dates[0].date.split('/')[1]}`;
+      const endStr = `${dates[6].date.split('/')[0]}/${dates[6].date.split('/')[1]}`;
+      const isActive = (w === currentWeek);
+      return `<button type="button" class="week-pill ${isActive ? 'active' : ''}" data-week="${w}">
+        Semana ${idx + 1} (${startStr} - ${endStr})
+      </button>`;
+    }).join('');
+
+    nav.querySelectorAll('.week-pill').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const week = btn.dataset.week;
+        if (window.App && window.App.navigateToWeek) {
+          window.App.navigateToWeek(week);
+        }
+      });
+    });
+  },
+
+  updateShiftBadges() {
+    const weekStart = this.weekStartInput ? this.weekStartInput.value : '';
+    if (!this.employeeNamesContainer) return;
+    const cards = this.employeeNamesContainer.querySelectorAll('.employee-card');
+    cards.forEach((card, i) => {
+      const badge = card.querySelector('.emp-shifts-badge');
+      if (badge) {
+        const effectiveShiftMode = this.getEffectiveShiftMode(i, weekStart);
+        const shiftLabel = (i === 0) 
+          ? 'Solo Mañana (5M / 0T)' 
+          : (effectiveShiftMode === '3M2T' ? '3 Mañanas + 2 Tardes' : '2 Mañanas + 3 Tardes');
+        const shiftTagClass = (i === 0) ? 'emp-shifts-badge--morning' : (effectiveShiftMode === '3M2T' ? 'emp-shifts-badge--3m2t' : 'emp-shifts-badge--2m3t');
+        badge.className = `emp-shifts-badge ${shiftTagClass}`;
+        badge.textContent = shiftLabel;
+      }
+    });
+  },
+
+  updatePatternSelects() {
+    const weekStart = this.weekStartInput ? this.weekStartInput.value : '';
+    if (!this.employeeNamesContainer) return;
+    const selects = this.employeeNamesContainer.querySelectorAll('.emp-pattern-select');
+    selects.forEach(sel => {
+      const idx = parseInt(sel.dataset.index);
+      const eff = this.getEffectivePatternWeek(idx, weekStart);
+      sel.value = eff;
+    });
+    this.updateShiftBadges();
+  },
+
   renderEmployeeNames(count, savedNames) {
     this.employeeNamesContainer.innerHTML = '';
+    const weekStart = this.weekStartInput ? this.weekStartInput.value : '';
     for (let i = 0; i < count; i++) {
       const defaultName = DEFAULT_EMPLOYEE_NAMES[i] || `Empleado ${i + 1}`;
-      // Si el nombre guardado es el antiguo genérico "Empleado X", usar el nombre fijado por defecto
       let currentName = defaultName;
       if (savedNames && savedNames[i] && savedNames[i] !== `Empleado ${i + 1}`) {
         currentName = savedNames[i];
       }
+      const effectiveWeek = this.getEffectivePatternWeek(i, weekStart);
+      const effectiveShiftMode = this.getEffectiveShiftMode(i, weekStart);
+      const shiftLabel = (i === 0) 
+        ? 'Solo Mañana (5M / 0T)' 
+        : (effectiveShiftMode === '3M2T' ? '3 Mañanas + 2 Tardes' : '2 Mañanas + 3 Tardes');
+      const shiftTagClass = (i === 0) ? 'emp-shifts-badge--morning' : (effectiveShiftMode === '3M2T' ? 'emp-shifts-badge--3m2t' : 'emp-shifts-badge--2m3t');
+
+      const patternOptions = ROTATING_OFF_PATTERN.map(p => 
+        `<option value="${p.week}" ${p.week === effectiveWeek ? 'selected' : ''}>Semana ${p.week}: ${p.label}</option>`
+      ).join('');
+
       const div = document.createElement('div');
-      div.className = 'form-group';
-      const keyNotice = (i === 0) ? ' <span style="font-size:0.75rem; color:var(--color-primary); font-weight:600;">(Clave - Solo Mañana)</span>' : '';
+      div.className = 'form-group employee-card';
+      const keyNotice = (i === 0) ? '<span class="emp-key-tag">Clave · Solo Mañana</span>' : '';
       div.innerHTML = `
-        <label for="emp-name-${i}">Empleado ${i + 1}${keyNotice}</label>
-        <input type="text" id="emp-name-${i}" data-index="${i}"
+        <div class="emp-card-header">
+          <label for="emp-name-${i}">Empleado ${i + 1}</label>
+          ${keyNotice}
+        </div>
+        <input type="text" id="emp-name-${i}" class="emp-name-input" data-index="${i}"
                value="${this._escapeHtml(currentName)}"
                placeholder="${this._escapeHtml(defaultName)}">
+        <div class="emp-pattern-group">
+          <label for="emp-pattern-${i}" class="emp-pattern-label">Patrón rotativo:</label>
+          <select id="emp-pattern-${i}" class="emp-pattern-select" data-index="${i}">
+            ${patternOptions}
+          </select>
+        </div>
+        <div class="emp-shift-group">
+          <span class="emp-shift-label">Turnos semanales:</span>
+          <span class="emp-shifts-badge ${shiftTagClass}">${shiftLabel}</span>
+        </div>
       `;
       this.employeeNamesContainer.appendChild(div);
     }
+
+    // Attach change listener to pattern selects
+    this.employeeNamesContainer.querySelectorAll('.emp-pattern-select').forEach(select => {
+      select.addEventListener('change', (e) => {
+        const idx = parseInt(e.target.dataset.index);
+        const val = parseInt(e.target.value);
+        const currentWeek = this.weekStartInput ? this.weekStartInput.value : '';
+        this.setEmployeePatternForWeek(idx, val, currentWeek);
+        const empName = this.getEmployeeNames()[idx] || `Empleado ${idx + 1}`;
+        Toast.show(`Patrón de ${empName}: Semana ${val} (${ROTATING_OFF_PATTERN[val-1].label})`, 'info', 2500);
+      });
+    });
   },
 
   getEmployeeNames() {
-    const inputs = this.employeeNamesContainer.querySelectorAll('input');
+    const inputs = this.employeeNamesContainer.querySelectorAll('.emp-name-input');
     return Array.from(inputs).map(input => {
       const idx = parseInt(input.dataset.index);
       const defaultName = DEFAULT_EMPLOYEE_NAMES[idx] || `Empleado ${idx + 1}`;
@@ -767,6 +969,12 @@ const Renderer = {
 
     // 3. Update Live Audit & Balance panel
     Auditor.run(this.currentMatrix, this.currentEmployees, this.getDemandConfig(), this.currentWeekStart);
+
+    // 4. Update multi-week nav pills
+    const genWeeks = Storage.loadGeneratedWeeks();
+    if (genWeeks && genWeeks.length > 1) {
+      this.renderGeneratedWeeksNav(genWeeks, this.currentWeekStart);
+    }
   },
 
   getScheduleFromDOM() {
@@ -1093,7 +1301,31 @@ const Auditor = {
       const is2Off = countL === 2;
       const isConsecutive = is2Off && ((offDays[1] - offDays[0] === 1) || (offDays[0] === 0 && offDays[1] === 6));
 
-      empStats.push({ name: employees[e], m: countM, t: countT, l: countL, hours: (countM + countT) * 8, isKey, isConsecutive });
+      const pWeek = Renderer.getEffectivePatternWeek(e, weekStart);
+      const pItem = ROTATING_OFF_PATTERN[pWeek - 1] || ROTATING_OFF_PATTERN[0];
+      const matchesPattern = is2Off && isConsecutive && (offDays[0] === pItem.days[0] && offDays[1] === pItem.days[1]);
+
+      const shiftMode = Renderer.getEffectiveShiftMode(e, weekStart);
+      const targetM = (e === 0 || shiftMode === '5M0T') ? 5 : (shiftMode === '3M2T' ? 3 : 2);
+      const targetT = (e === 0 || shiftMode === '5M0T') ? 0 : (shiftMode === '3M2T' ? 2 : 3);
+      const matchesShiftTarget = (countM === targetM && countT === targetT);
+
+      empStats.push({
+        name: employees[e],
+        m: countM,
+        t: countT,
+        l: countL,
+        hours: (countM + countT) * 8,
+        isKey,
+        isConsecutive,
+        pWeek,
+        pLabel: pItem.label,
+        matchesPattern,
+        shiftMode,
+        targetM,
+        targetT,
+        matchesShiftTarget
+      });
 
       if (!is2Off) totalOffdayMismatches++;
       if (is2Off && !isConsecutive) totalConsecutiveMismatches++;
@@ -1103,13 +1335,15 @@ const Auditor = {
       if (countM === 0) totalMorningIssues++;
 
       const tag = document.createElement('span');
-      let statusClass = (is2Off && isConsecutive) ? 'ok' : (!is2Off ? (countL < 2 ? 'err' : 'warn') : 'warn');
+      let statusClass = (is2Off && isConsecutive && matchesPattern) ? 'ok' : (!is2Off ? (countL < 2 ? 'err' : 'warn') : 'warn');
       tag.className = `audit-tag audit-tag--${statusClass}`;
       let consecNotice = '';
       if (is2Off && !isConsecutive) {
         consecNotice = ' ⚠️ No seguidos';
+      } else if (is2Off && !matchesPattern) {
+        consecNotice = ' ℹ️ Modificado';
       }
-      tag.textContent = `${employees[e]}: ${countL}/2 Libres${consecNotice}`;
+      tag.textContent = `${employees[e]}: ${countL}/2 Libres [Sem.${pWeek}]${consecNotice}`;
       offdaysSummary.appendChild(tag);
     }
 
@@ -1159,16 +1393,24 @@ const Auditor = {
 
     // 5. Equity Table
     if (equityContainer) {
-      let html = '<table class="equity-table"><thead><tr><th>Empleado</th><th>Turnos Mañana</th><th>Turnos Tarde</th><th>Días Libres</th><th>Horas Semanales</th></tr></thead><tbody>';
+      let html = '<table class="equity-table"><thead><tr><th>Empleado</th><th>Patrón Rotativo</th><th>Alternancia Turnos</th><th>Turnos Mañana</th><th>Turnos Tarde</th><th>Días Libres</th><th>Horas Semanales</th></tr></thead><tbody>';
       empStats.forEach(stat => {
         const mNotice = stat.m === 0 ? ' <span title="Se requiere al menos 1 turno de mañana" style="color:var(--color-danger); font-size:0.75rem;">⚠️ Mín. 1 M</span>' : '';
         const tNotice = (stat.isKey && stat.t > 0) ? ' <span title="El empleado clave debe ser solo mañana" style="color:var(--color-danger); font-size:0.75rem;">⚠️ Solo M</span>' : '';
         const consecNotice = (!stat.isConsecutive && stat.l === 2) ? ' <span title="Los 2 días libres deben ser seguidos" style="color:var(--color-warning); font-size:0.75rem;">⚠️ No seguidos</span>' : '';
+        const patternBadge = stat.matchesPattern
+          ? `<span class="badge badge--success" style="font-size:0.75rem;">Sem. ${stat.pWeek} (${stat.pLabel})</span>`
+          : `<span class="badge badge--warning" style="font-size:0.75rem;" title="Días libres modificados respecto al patrón de esta semana">Sem. ${stat.pWeek} (Modificado)</span>`;
+        const shiftBadge = stat.matchesShiftTarget
+          ? `<span class="badge badge--success" style="font-size:0.75rem;">${stat.targetM}M / ${stat.targetT}T ✅</span>`
+          : `<span class="badge badge--warning" style="font-size:0.75rem;" title="Objetivo semana: ${stat.targetM}M / ${stat.targetT}T">${stat.targetM}M / ${stat.targetT}T ⚠️</span>`;
         const nameText = stat.isKey
           ? `${Renderer._escapeHtml(stat.name)} <span style="font-size:0.75rem; color:var(--text-muted); font-weight:normal;">(Clave)</span>`
           : Renderer._escapeHtml(stat.name);
         html += `<tr>
           <td style="font-weight:600; text-align:left;">${nameText}</td>
+          <td>${patternBadge}</td>
+          <td>${shiftBadge}</td>
           <td><span style="color:var(--color-morning); font-weight:700;">${stat.m}</span>${mNotice}</td>
           <td><span style="color:var(--color-afternoon); font-weight:700;">${stat.t}</span>${tNotice}</td>
           <td><span style="color:var(--color-free); font-weight:700;">${stat.l}</span>${consecNotice}</td>
@@ -1325,8 +1567,15 @@ const IndividualView = {
     const dayDates = Renderer._getDayDates(this.weekStart);
     const shiftEmojis = { M: '☀️ Mañana', T: '🌅 Tarde', L: '🏖️ Libre' };
 
+    const pWeek = Renderer.getEffectivePatternWeek(empIdx, this.weekStart);
+    const pItem = ROTATING_OFF_PATTERN[pWeek - 1] || ROTATING_OFF_PATTERN[0];
+    const shiftMode = Renderer.getEffectiveShiftMode(empIdx, this.weekStart);
+    const shiftModeLabel = (empIdx === 0) ? 'Solo Mañanas (5M)' : (shiftMode === '3M2T' ? '3 Mañanas + 2 Tardes' : '2 Mañanas + 3 Tardes');
+
     let msg = `👤 *Horario Semanal - ${empName}*\n`;
-    msg += `🗓️ Semana del ${Renderer._formatDateLong(this.weekStart)}\n\n`;
+    msg += `🗓️ Semana del ${Renderer._formatDateLong(this.weekStart)}\n`;
+    msg += `🔄 *Patrón rotativo:* Semana ${pWeek} (${pItem.label})\n`;
+    msg += `⏱️ *Turnos:* ${shiftModeLabel}\n\n`;
 
     dayDates.forEach((d, dayIdx) => {
       const shiftKey = (this.matrix && this.matrix[empIdx]) ? this.matrix[empIdx][dayIdx] : 'L';
@@ -1431,6 +1680,13 @@ const App = {
         }
       }
     }
+    const weeksCountSelect = document.getElementById('weeks-count');
+    if (weeksCountSelect) {
+      const savedWeeksCount = Storage.loadWeeksCount();
+      if (savedWeeksCount) {
+        weeksCountSelect.value = savedWeeksCount;
+      }
+    }
     this._updateWeekBadge(Renderer.weekStartInput.value);
   },
 
@@ -1469,32 +1725,40 @@ const App = {
     }
   },
 
+  navigateToWeek(weekStr) {
+    const normalized = Renderer.normalizeToMonday(weekStr);
+    if (!normalized) return;
+    Renderer.weekStartInput.value = normalized;
+    this.state.weekStart = normalized;
+    this._saveState();
+    this._updateWeekBadge(normalized);
+    Renderer.updatePatternSelects();
+
+    const saved = Storage.loadSchedule(normalized);
+    const names = Renderer.getEmployeeNames();
+
+    if (saved && saved.length === names.length) {
+      Renderer.showSchedule();
+      Renderer.renderSchedule(saved, names, normalized);
+      Renderer.renderPDF(saved, names, normalized);
+      Toast.show(`Semana del ${Renderer._formatDateLong(normalized)}`, 'info', 2000);
+    } else {
+      if (!Renderer.schedulePanel.hidden) {
+        Renderer.showConfig();
+        Toast.show(`Semana del ${Renderer._formatDateLong(normalized)} lista para configurar`, 'info', 2500);
+      }
+    }
+
+    const generatedWeeks = Storage.loadGeneratedWeeks();
+    Renderer.renderGeneratedWeeksNav(generatedWeeks, normalized);
+  },
+
   navigateWeek(deltaDays) {
     const currentVal = Renderer.weekStartInput.value;
     let base = Renderer.getMonday(currentVal || new Date());
     base.setDate(base.getDate() + deltaDays);
     const newWeekStr = Renderer._formatDate(base);
-
-    Renderer.weekStartInput.value = newWeekStr;
-    this.state.weekStart = newWeekStr;
-    this._saveState();
-    this._updateWeekBadge(newWeekStr);
-
-    // Intentar cargar cuadrante específico de esta semana
-    const saved = Storage.loadSchedule(newWeekStr);
-    const names = Renderer.getEmployeeNames();
-
-    if (saved && saved.length === names.length) {
-      Renderer.showSchedule();
-      Renderer.renderSchedule(saved, names, newWeekStr);
-      Renderer.renderPDF(saved, names, newWeekStr);
-      Toast.show(`Cuadrante cargado: semana del ${Renderer._formatDateLong(newWeekStr)}`, 'info', 2500);
-    } else {
-      if (!Renderer.schedulePanel.hidden) {
-        Renderer.showConfig();
-        Toast.show(`Semana del ${Renderer._formatDateLong(newWeekStr)} lista para configurar`, 'info', 2500);
-      }
-    }
+    this.navigateToWeek(newWeekStr);
   },
 
   _bindEvents() {
@@ -1521,6 +1785,7 @@ const App = {
       this.state.weekStart = Renderer.weekStartInput.value;
       this._saveState();
       this._updateWeekBadge(Renderer.weekStartInput.value);
+      Renderer.updatePatternSelects();
     });
 
     // Week navigation buttons
@@ -1589,11 +1854,20 @@ const App = {
       });
     }
 
+    // Weeks count selector
+    const weeksCountSelect = document.getElementById('weeks-count');
+    if (weeksCountSelect) {
+      weeksCountSelect.addEventListener('change', () => {
+        Storage.saveWeeksCount(parseInt(weeksCountSelect.value) || 1);
+      });
+    }
+
     // Load saved schedule on startup if available
     window.addEventListener('load', () => {
       const config = Storage.loadConfig();
       const weekStart = config && config.weekStart ? config.weekStart : Renderer.weekStartInput.value;
       const saved = Storage.loadSchedule(weekStart);
+      const generatedWeeks = Storage.loadGeneratedWeeks();
       if (saved) {
         const names = Storage.loadNames();
         if (names && saved.length === names.length) {
@@ -1602,6 +1876,7 @@ const App = {
           Renderer.renderSchedule(saved, names, weekStart);
           Renderer.renderPDF(saved, names, weekStart);
           this._updateWeekBadge(weekStart);
+          Renderer.renderGeneratedWeeksNav(generatedWeeks, weekStart);
         }
       }
     });
@@ -1618,23 +1893,61 @@ const App = {
 
     const employees = Renderer.getEmployeeNames();
     const demand = Renderer.getDemandConfig();
-    const weekStart = Renderer.weekStartInput.value;
+    const startWeek = Renderer.weekStartInput.value;
+    const weeksCountSelect = document.getElementById('weeks-count');
+    const weeksCount = parseInt(weeksCountSelect ? weeksCountSelect.value : '1') || 1;
+    Storage.saveWeeksCount(weeksCount);
 
-    const result = Scheduler.generate(employees, demand);
-
-    if (!result.success) {
-      Toast.show(result.error, 'error', 5000);
-      return;
+    if (!Storage.loadBaseWeek()) {
+      Storage.saveBaseWeek(startWeek);
     }
 
-    Storage.saveSchedule(result.matrix, weekStart);
-    Renderer.renderSchedule(result.matrix, employees, weekStart);
-    Renderer.renderPDF(result.matrix, employees, weekStart);
-    this._updateWeekBadge(weekStart);
+    const generatedWeeks = [];
+    let firstWeekMatrix = null;
+
+    // Generate schedules for all selected weeks
+    for (let w = 0; w < weeksCount; w++) {
+      const monday = Renderer.getMonday(startWeek);
+      monday.setDate(monday.getDate() + (w * 7));
+      const currentWeekStr = Renderer._formatDate(monday);
+      const patternWeeks = Renderer.getEffectivePatternWeeks(currentWeekStr);
+      const shiftTargets = Renderer.getEffectiveShiftTargets(currentWeekStr);
+
+      const result = Scheduler.generate(employees, demand, {
+        patternWeeks,
+        weekStart: currentWeekStr,
+        shiftTargets
+      });
+
+      if (!result.success) {
+        Toast.show(`Error en semana ${w + 1} (${Renderer._formatDateLong(currentWeekStr)}): ${result.error}`, 'error', 5000);
+        return;
+      }
+
+      Storage.saveSchedule(result.matrix, currentWeekStr);
+      generatedWeeks.push(currentWeekStr);
+      if (w === 0) {
+        firstWeekMatrix = result.matrix;
+      }
+    }
+
+    Storage.saveGeneratedWeeks(generatedWeeks);
+
+    // Display first week by default
+    Renderer.renderSchedule(firstWeekMatrix, employees, startWeek);
+    Renderer.renderPDF(firstWeekMatrix, employees, startWeek);
+    this._updateWeekBadge(startWeek);
+    Renderer.renderGeneratedWeeksNav(generatedWeeks, startWeek);
     Renderer.showSchedule();
-    Toast.show('¡Cuadrante semanal generado con éxito!', 'success');
+
+    if (weeksCount > 1) {
+      Toast.show(`¡Cuadrante de ${weeksCount} semanas generado con éxito! Usa las pestañas superiores para navegar.`, 'success', 4000);
+    } else {
+      Toast.show('¡Cuadrante semanal generado con éxito!', 'success');
+    }
   },
 };
 
-// Start the app
+// Expose App globally and start on DOMContentLoaded
+window.App = App;
 document.addEventListener('DOMContentLoaded', () => App.init());

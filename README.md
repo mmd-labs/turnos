@@ -9,16 +9,36 @@ Funciona íntegramente en el navegador (100% client-side), sin necesidad de base
 ## 🚀 Características Principales
 
 - **Asignación Heurística Inteligente**: Algoritmo que distribuye descansos y turnos respetando la capacidad del equipo y la demanda de cada día.
+- **Patrón Rotativo Cíclico de Días Libres (Ciclo de 7 Semanas)**:
+  - Rueda continua de 7 fases donde los 2 días libres consecutivos se desplazan exactamente 1 día hacia adelante cada semana:
+    - **Semana 1**: Lunes y Martes (`[0, 1]`)
+    - **Semana 2**: Martes y Miércoles (`[1, 2]`)
+    - **Semana 3**: Miércoles y Jueves (`[2, 3]`)
+    - **Semana 4**: Jueves y Viernes (`[3, 4]`)
+    - **Semana 5**: Viernes y Sábado (`[4, 5]`)
+    - **Semana 6**: Sábado y Domingo (`[5, 6]`)
+    - **Semana 7**: Domingo y Lunes (`[6, 0]`)
+  - Al cambiar de semana en el calendario, el sistema avanza automáticamente el ciclo para cada trabajador de manera equitativa.
+  - La tarjeta de cada empleado incluye un selector para personalizar su semana de inicio en el ciclo.
+- **Generador Multi-Semanal y Navegación entre Semanas**:
+  - Selector de horizonte de planificación: genera de 1 a 12 semanas (1, 2, 3, 4, 7, 8 o 12 semanas) en un solo clic.
+  - Cada semana se calcula y almacena individualmente con sus fechas de calendario.
+  - Barra interactiva de navegación con pestañas tipo *pill* para alternar instantáneamente entre todas las semanas generadas sin recargar.
+- **Alternancia Estricta de Turnos Semana a Semana**:
+  - Los empleados 2 a N alternan de forma exacta entre dos modalidades de turno de semana a semana:
+    - **Semana impar**: **3 turnos de Mañana** + **2 turnos de Tarde** (o viceversa).
+    - **Semana par**: **2 turnos de Mañana** + **3 turnos de Tarde**.
+  - **Empleado 1 (Mar)**: trabaja exclusivamente **5 turnos de Mañana y 0 de Tarde** todas las semanas.
+  - El algoritmo asegura mediante holgura por prioridad y fases de reparación el cumplimiento del 100% de los turnos objetivo de cada empleado.
 - **Reglas y Restricciones Duras**:
-  - Empleado clave (Empleado 1): trabaja exclusivamente en turno de **Mañana** y libra en 2 días consecutivos de menor demanda semanal.
-  - Empleado 2 y resto de la plantilla: rotan entre turnos de **Mañana** y **Tarde** con la misma lógica general.
-  - Cada empleado disfruta estrictamente de **2 días libres semanales seguidos** (`L`) (ej. Lun-Mar, Mar-Mié, ..., Sáb-Dom, Dom-Lun).
+  - Empleado clave (Empleado 1 - Mar): trabaja exclusivamente en turno de **Mañana** en sus 5 días laborables (5M / 0T) y libra según su semana correspondiente del ciclo rotativo.
+  - Cada empleado disfruta estrictamente de **2 días libres semanales seguidos** (`L`).
   - **Mínimo 1 Mañana por Empleado**: Todos los empleados tienen garantizado al menos **1 turno de Mañana** a la semana.
 - **Optimización Ergonómica de Descanso**:
   - Reduce al mínimo las secuencias fatigosas de **Tarde seguida de Mañana** (`T -> M`).
-  - Realiza intercambios exclusivos entre turnos de trabajo (`M` $\leftrightarrow$ `T`), garantizando que ningún trabajador pierda o gane días libres en la optimización ni se quede sin su turno de mañana mínimo.
+  - Realiza intercambios recíprocos entre trabajadores que preservan de forma exacta los totales de mañana y tarde de cada trabajador.
 - **Auditoría y Balance en Vivo**:
-  - Supervisión en tiempo real del cumplimiento de demanda diaria, garantía de mañanas, 2 días libres y consecutividad de libranza (`⚠️ No seguidos`).
+  - Supervisión en tiempo real del cumplimiento de demanda diaria, garantía de mañanas, 2 días libres seguidos, correspondencia con el patrón rotativo (`[Sem.X]`) y cumplimiento de la alternancia de turnos (`3M / 2T ✅` o `2M / 3T ✅`).
 - **Cuadrante Visual por Turnos**:
   - Columnas organizadas con el **Día y la Fecha del calendario** (Lunes a Domingo con día y mes).
   - Filas fijas para cada turno: **Mañana**, **Tarde** y **Libre**.
@@ -27,7 +47,7 @@ Funciona íntegramente en el navegador (100% client-side), sin necesidad de base
 - **Exportación a PDF Profesional**:
   - Genera un documento en formato A4 apaisado (*landscape*) reflejando fielmente la tabla de turnos por día y fecha, utilizando `html2pdf.js`.
 - **Persistencia en LocalStorage**:
-  - Guarda automáticamente nombres de empleados, fechas, matriz de demanda y el último cuadrante generado.
+  - Guarda automáticamente nombres de empleados, fechas, matriz de demanda, patrón rotativo de cada trabajador, modos de turno y todas las semanas generadas.
 - **Diseño SaaS Responsivo**:
   - Interfaz limpia, accesible y adaptada tanto a escritorio como a dispositivos móviles.
 
@@ -41,18 +61,17 @@ El motor (`Scheduler` en [`app.js`](file:///Users/mario/workspace/turnos/app.js)
    - **Capacidad Total**: La demanda total de la semana no puede superar la capacidad máxima disponible ($\text{Empleados} \times 5$ días laborables).
    - **Capacidad Diaria**: En ningún día la demanda $(\text{Mañana} + \text{Tarde})$ puede superar la plantilla total de empleados.
    - **Capacidad de Mañanas**: La demanda total de mañanas debe ser suficiente para cubrir las 5 mañanas del Empleado 1 y al menos 1 mañana para cada uno de los restantes $N - 1$ empleados ($\text{Demanda Mañanas} \ge N + 4$).
-2. **Fase 1 (Empleado Clave 1)**:
-   - Evalúa todos los pares de días libres consecutivos y selecciona el de menor demanda combinada que permita trabajar en mañanas en sus 5 días laborables.
-   - En sus 5 días laborables restantes, se le asigna exclusivamente turno de Mañana (`M`).
-3. **Fase 2 (Distribución de Días Libres Consecutivos)**:
-   - Para los empleados restantes (Empleados 2 a N), asigna pares consecutivos de libranza (`[Lun-Mar]`, `[Mar-Mié]`, `[Mié-Jue]`, `[Jue-Vie]`, `[Vie-Sáb]`, `[Sáb-Dom]`, `[Dom-Lun]`) optimizando la cobertura de la holgura diaria mediante búsqueda branch-and-bound.
-4. **Fase 3 (Asignación de Turnos Mañana/Tarde y Mínimo Garantizado)**:
+2. **Fase 1 y 2 (Asignación de Descansos por Patrón Rotativo)**:
+   - Determina la semana efectiva del ciclo (Semana 1 a 7) para cada empleado a partir de la fecha seleccionada en el calendario y su configuración de inicio.
+   - Asigna los 2 días libres continuos (`L`) correspondientes a cada trabajador.
+   - Para el Empleado 1 (Mar), asigna exclusivamente turno de Mañana (`M`) en sus 5 días laborables restantes.
+3. **Fase 3 (Asignación de Turnos Mañana/Tarde y Mínimo Garantizado)**:
    - Contabiliza con precisión los turnos de mañana ya cubiertos por el empleado clave.
    - Asigna los turnos restantes (`M` y `T`) priorizando a quienes aún no tienen turno de mañana y balanceando la carga acumulada.
    - Aplica un paso de garantía estricta para asegurar que **todos los empleados tengan al menos 1 turno de mañana**.
-5. **Fase 4 (Optimización Ergonómica)**:
+4. **Fase 4 (Optimización Ergonómica)**:
    - Detecta transiciones perjudiciales `T -> M` entre días consecutivos.
-   - Ejecuta intercambios entre trabajadores en el mismo día preservando invariantes: la demanda diaria se mantiene exacta, cada trabajador mantiene sus 2 días libres consecutivos y nadie pierde su turno de mañana mínimo.
+   - Ejecuta intercambios entre trabajadores en el mismo día preservando invariantes: la demanda diaria se mantiene exacta, cada trabajador mantiene sus días libres intactos y nadie pierde su turno de mañana mínimo.
 
 ---
 

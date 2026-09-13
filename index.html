@@ -37,19 +37,29 @@
       <h2 class="section-title">Configuración Semanal</h2>
 
       <!-- Week selector with navigation -->
-      <div class="config-row">
+      <div class="config-row config-row--main">
         <div class="form-group week-nav-group">
-          <label for="week-start">Semana del (lunes)</label>
+          <label for="week-start">Semana de inicio (lunes)</label>
           <div class="week-nav">
             <button type="button" id="btn-prev-week" class="btn btn-outline btn-sm" title="Semana anterior">←</button>
             <input type="date" id="week-start">
             <button type="button" id="btn-next-week" class="btn btn-outline btn-sm" title="Semana siguiente">→</button>
           </div>
         </div>
-      </div>
 
-      <!-- Employee count -->
-      <div class="config-row">
+        <div class="form-group">
+          <label for="weeks-count">Semanas a generar</label>
+          <select id="weeks-count" class="form-select">
+            <option value="1">1 semana</option>
+            <option value="2">2 semanas</option>
+            <option value="3">3 semanas</option>
+            <option value="4" selected>4 semanas (1 mes)</option>
+            <option value="7">7 semanas (Ciclo completo)</option>
+            <option value="8">8 semanas (2 meses)</option>
+            <option value="12">12 semanas (3 meses)</option>
+          </select>
+        </div>
+
         <div class="form-group">
           <label for="employee-count">Cantidad de empleados</label>
           <input type="number" id="employee-count" min="8" max="50" value="8">
@@ -58,8 +68,27 @@
 
       <!-- Employee names -->
       <div class="config-block">
-        <h3>Plantilla de Empleados</h3>
+        <h3>Plantilla de Empleados y Patrón Rotativo</h3>
         <p class="config-hint">El primer empleado actuará como empleado clave (fijo de mañana). El resto de empleados rotará entre mañana y tarde con al menos 1 turno de mañana garantizado.</p>
+        
+        <!-- Rotating Pattern Banner -->
+        <div class="pattern-banner">
+          <div class="pattern-banner-header">
+            <span class="pattern-banner-icon">🔄</span>
+            <strong>Patrón Rotativo Cíclico de Días Libres (7 Semanas)</strong>
+          </div>
+          <p class="pattern-banner-text">Los 2 días libres consecutivos avanzan 1 día cada semana según el ciclo rotativo. Puedes ajustar la semana del patrón de cada empleado en su selector:</p>
+          <div class="pattern-chips">
+            <span class="pattern-chip"><strong>Sem. 1:</strong> Lun - Mar</span>
+            <span class="pattern-chip"><strong>Sem. 2:</strong> Mar - Mié</span>
+            <span class="pattern-chip"><strong>Sem. 3:</strong> Mié - Jue</span>
+            <span class="pattern-chip"><strong>Sem. 4:</strong> Jue - Vie</span>
+            <span class="pattern-chip"><strong>Sem. 5:</strong> Vie - Sáb</span>
+            <span class="pattern-chip"><strong>Sem. 6:</strong> Sáb - Dom</span>
+            <span class="pattern-chip"><strong>Sem. 7:</strong> Dom - Lun</span>
+          </div>
+        </div>
+
         <div id="employee-names" class="employee-grid"></div>
       </div>
 
@@ -122,6 +151,7 @@
             <span id="schedule-week-badge" class="week-badge"></span>
             <button type="button" id="btn-sched-next" class="btn btn-outline btn-sm" title="Semana siguiente">Sig. →</button>
           </div>
+          <div id="generated-weeks-nav" class="generated-weeks-nav" hidden></div>
         </div>
         <div class="schedule-actions">
           <button id="btn-edit" class="btn btn-outline">Volver a Configurar</button>
@@ -252,8 +282,10 @@
                 <strong>Pulsa "Generar Cuadrante"</strong>
                 <p>El motor inteligente calculará la asignación respetando todas las reglas:</p>
                 <ul class="help-bullet-list">
-                  <li>Asigna estrictamente <strong>2 días libres semanales seguidos</strong> a cada empleado.</li>
-                  <li>Garantiza que <strong>todos los trabajadores tengan al menos 1 turno de mañana</strong> en la semana.</li>
+                  <li>Aplica el <strong>patrón rotativo cíclico de 7 semanas</strong>: los 2 días libres seguidos se desplazan 1 día cada semana (Sem. 1: Lun-Mar ➔ Sem. 2: Mar-Mié ➔ ... ➔ Sem. 7: Dom-Lun ➔ Sem. 1).</li>
+                  <li><strong>Alternancia equitativa de turnos</strong>: Cada empleado trabaja <strong>3 mañanas y 2 tardes</strong> una semana, y a la siguiente <strong>2 mañanas y 3 tardes</strong> de forma continua.</li>
+                  <li><strong>Empleado clave</strong>: El Empleado 1 trabaja exclusivamente en turno de mañana (5 mañanas semanales).</li>
+                  <li><strong>Generación multi-semanal</strong>: Si seleccionas generar varias semanas (ej. 4 semanas u 8 semanas), se calculan y guardan todas en lote para que puedas revisarlas y exportarlas.</li>
                   <li>Aplica <strong>optimización ergonómica</strong> para evitar turnos de fatiga (Tarde seguida de Mañana al día siguiente).</li>
                 </ul>
               </div>
@@ -263,7 +295,7 @@
               <div class="help-step-number">5</div>
               <div class="help-step-details">
                 <strong>Revisa, ajusta manualmente y exporta a PDF</strong>
-                <p>En el cuadrante generado puedes cambiar cualquier turno individual mediante los selectores en vivo. La auditoría se recalcula de inmediato. Pulsa <strong>"Exportar a PDF"</strong> para obtener un documento A4 apaisado profesional listo para imprimir.</p>
+                <p>En el cuadrante generado puedes navegar entre las semanas generadas con la barra de navegación o los botones. Puedes cambiar cualquier turno individual mediante los selectores en vivo. Pulsa <strong>"Exportar a PDF"</strong> para obtener un documento A4 apaisado profesional listo para imprimir.</p>
               </div>
             </div>
           </div>
@@ -283,15 +315,39 @@
 
             <div class="help-feature-card">
               <div class="help-feature-header">
+                <span class="help-feature-icon">⚖️</span>
+                <strong>Alternancia de Turnos (3M/2T ↔ 2M/3T)</strong>
+              </div>
+              <p>Rotación equilibrada semanal: 3 Mañanas y 2 Tardes una semana, alternando a 2 Mañanas y 3 Tardes a la semana siguiente de forma continua para todos los trabajadores.</p>
+            </div>
+
+            <div class="help-feature-card">
+              <div class="help-feature-header">
                 <span class="help-feature-icon">👑</span>
                 <strong>Empleado 1 Clave (Solo Mañana)</strong>
               </div>
-              <p>Trabaja exclusivamente en turno de mañana durante sus 5 días laborables y libra en sus 2 días seguidos de menor demanda.</p>
+              <p>Trabaja exclusivamente en turno de mañana durante sus 5 días laborables y descansa en sus 2 días consecutivos según el patrón rotativo.</p>
             </div>
 
             <div class="help-feature-card">
               <div class="help-feature-header">
                 <span class="help-feature-icon">🔄</span>
+                <strong>Patrón Rotativo Cíclico (7 Semanas)</strong>
+              </div>
+              <p>Rueda continua de 7 semanas: Sem 1 (Lun-Mar), Sem 2 (Mar-Mié), Sem 3 (Mié-Jue), Sem 4 (Jue-Vie), Sem 5 (Vie-Sáb), Sem 6 (Sáb-Dom), Sem 7 (Dom-Lun). Al cambiar de semana en el calendario, el sistema avanza el descanso de cada empleado de forma justa y equitativa.</p>
+            </div>
+
+            <div class="help-feature-card">
+              <div class="help-feature-header">
+                <span class="help-feature-icon">📅</span>
+                <strong>Generador Multi-Semanal</strong>
+              </div>
+              <p>Genera y almacena automáticamente cuadrantes para 1, 2, 3, 4, 7, 8 o 12 semanas consecutivas con un solo clic, aplicando la rotación y alternancia semana a semana.</p>
+            </div>
+
+            <div class="help-feature-card">
+              <div class="help-feature-header">
+                <span class="help-feature-icon">🌅</span>
                 <strong>Mínimo 1 Mañana Garantizada</strong>
               </div>
               <p>Todos los empleados rotan equitativamente asegurando al menos una mañana para cada uno.</p>
@@ -318,7 +374,7 @@
                 <span class="help-feature-icon">🔍</span>
                 <strong>Auditoría y Balance en Vivo</strong>
               </div>
-              <p>Supervisa en tiempo real la cobertura de demanda, verifica que los libres sean exactamente 2 y seguidos, y avisa de posibles infracciones ergonómicas.</p>
+              <p>Supervisa en tiempo real la cobertura de demanda, verifica que los libres sean exactamente 2 y seguidos según el patrón, y avisa de posibles infracciones ergonómicas.</p>
             </div>
 
             <div class="help-feature-card">
