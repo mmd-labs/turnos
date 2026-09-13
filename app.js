@@ -5,6 +5,8 @@ const STORAGE_KEYS = {
   NAMES: 'turnos_employee_names',
   CONFIG: 'turnos_config',
   SCHEDULE: 'turnos_schedule',
+  SCHEDULE_WEEK_PREFIX: 'turnos_schedule_',
+  THEME: 'turnos_theme',
 };
 
 const DAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
@@ -12,6 +14,80 @@ const DAYS_FULL = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábad
 const MIN_EMPLOYEES = 8;
 const DEFAULT_EMPLOYEES = 8;
 const DAYS_OFF_PER_EMPLOYEE = 2;
+
+/* ============================================
+   MODULE: Toast Notifications
+   ============================================ */
+const Toast = {
+  container: null,
+
+  init() {
+    this.container = document.getElementById('toast-container');
+  },
+
+  show(message, type = 'info', duration = 3500) {
+    if (!this.container) this.init();
+    if (!this.container) return;
+
+    const icons = {
+      success: '✅',
+      warning: '⚠️',
+      error: '❌',
+      info: 'ℹ️'
+    };
+
+    const toast = document.createElement('div');
+    toast.className = `toast toast--${type}`;
+    toast.innerHTML = `
+      <span class="toast-icon">${icons[type] || 'ℹ️'}</span>
+      <span class="toast-message">${this._escapeHtml(message)}</span>
+    `;
+    this.container.appendChild(toast);
+
+    setTimeout(() => {
+      toast.classList.add('toast-fadeout');
+      setTimeout(() => toast.remove(), 250);
+    }, duration);
+  },
+
+  _escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+};
+
+/* ============================================
+   MODULE: Theme (Dark / Light Mode)
+   ============================================ */
+const Theme = {
+  init() {
+    this.toggleBtn = document.getElementById('theme-toggle');
+    this.icon = document.getElementById('theme-icon');
+    const saved = localStorage.getItem(STORAGE_KEYS.THEME);
+    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const initial = saved || (prefersDark ? 'dark' : 'light');
+    this.setTheme(initial);
+
+    if (this.toggleBtn) {
+      this.toggleBtn.addEventListener('click', () => {
+        const current = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+        this.setTheme(current === 'dark' ? 'light' : 'dark');
+      });
+    }
+  },
+
+  setTheme(theme) {
+    if (theme === 'dark') {
+      document.documentElement.setAttribute('data-theme', 'dark');
+      if (this.icon) this.icon.textContent = '☀️';
+    } else {
+      document.documentElement.removeAttribute('data-theme');
+      if (this.icon) this.icon.textContent = '🌙';
+    }
+    localStorage.setItem(STORAGE_KEYS.THEME, theme);
+  }
+};
 
 /* ============================================
    MODULE: Storage
@@ -41,11 +117,22 @@ const Storage = {
     }
   },
 
-  saveSchedule(schedule) {
+  saveSchedule(schedule, weekStart) {
     localStorage.setItem(STORAGE_KEYS.SCHEDULE, JSON.stringify(schedule));
+    if (weekStart) {
+      localStorage.setItem(`${STORAGE_KEYS.SCHEDULE_WEEK_PREFIX}${weekStart}`, JSON.stringify(schedule));
+    }
   },
 
-  loadSchedule() {
+  loadSchedule(weekStart) {
+    if (weekStart) {
+      const specific = localStorage.getItem(`${STORAGE_KEYS.SCHEDULE_WEEK_PREFIX}${weekStart}`);
+      if (specific) {
+        try {
+          return JSON.parse(specific);
+        } catch {}
+      }
+    }
     try {
       return JSON.parse(localStorage.getItem(STORAGE_KEYS.SCHEDULE));
     } catch {
@@ -53,8 +140,11 @@ const Storage = {
     }
   },
 
-  clearSchedule() {
+  clearSchedule(weekStart) {
     localStorage.removeItem(STORAGE_KEYS.SCHEDULE);
+    if (weekStart) {
+      localStorage.removeItem(`${STORAGE_KEYS.SCHEDULE_WEEK_PREFIX}${weekStart}`);
+    }
   },
 };
 
@@ -418,6 +508,12 @@ const Renderer = {
       });
     }
 
+    // Update schedule week badge
+    const badge = document.getElementById('schedule-week-badge');
+    if (badge) {
+      badge.textContent = `Semana del ${this._formatDateLong(this.currentWeekStart)}`;
+    }
+
     // 2. Render Table Body: 3 rows (Mañana, Tarde, Libre)
     this.scheduleBody.innerHTML = '';
     const shiftDefs = [
@@ -484,9 +580,10 @@ const Renderer = {
             select.addEventListener('change', (e) => {
               const newShift = e.target.value;
               this.currentMatrix[empIdx][d] = newShift;
-              Storage.saveSchedule(this.currentMatrix);
+              Storage.saveSchedule(this.currentMatrix, this.currentWeekStart);
               this.renderSchedule(this.currentMatrix, this.currentEmployees, this.currentWeekStart);
               this.renderPDF(this.currentMatrix, this.currentEmployees, this.currentWeekStart);
+              Toast.show('Turno actualizado y balance recalculado.', 'info', 2000);
             });
 
             pill.appendChild(select);
@@ -500,6 +597,9 @@ const Renderer = {
 
       this.scheduleBody.appendChild(tr);
     });
+
+    // 3. Update Live Audit & Balance panel
+    Auditor.run(this.currentMatrix, this.currentEmployees, this.getDemandConfig(), this.currentWeekStart);
   },
 
   getScheduleFromDOM() {
@@ -669,9 +769,10 @@ const Exporter = {
 
     try {
       await html2pdf().set(opt).from(container).save();
+      Toast.show('PDF exportado con éxito.', 'success');
     } catch (err) {
       console.error('Error exporting PDF:', err);
-      alert('Error al exportar el PDF. Inténtalo de nuevo.');
+      Toast.show('Error al exportar el PDF. Inténtalo de nuevo.', 'error');
     } finally {
       if (btnExport) {
         btnExport.disabled = false;
@@ -679,6 +780,365 @@ const Exporter = {
       }
     }
   },
+
+  exportToCSV(matrix, employees, weekStart) {
+    if (!matrix || !employees) return;
+    const startDate = weekStart || (Renderer && Renderer.weekStartInput ? Renderer.weekStartInput.value : '');
+    const dayDates = Renderer._getDayDates(startDate);
+
+    // 1. Matriz por turnos
+    const headers = ['Turno', ...dayDates.map(d => `${d.name} (${d.date})`)];
+    const shifts = [
+      { key: 'M', label: 'Mañana' },
+      { key: 'T', label: 'Tarde' },
+      { key: 'L', label: 'Libre' }
+    ];
+
+    const rows = [
+      [`Cuadrante de Turnos - Semana del ${Renderer._formatDateLong(startDate)}`],
+      [],
+      headers
+    ];
+
+    shifts.forEach(shift => {
+      const row = [shift.label];
+      for (let d = 0; d < 7; d++) {
+        const emps = [];
+        for (let e = 0; e < employees.length; e++) {
+          if (matrix[e] && matrix[e][d] === shift.key) {
+            emps.push(employees[e]);
+          }
+        }
+        row.push(emps.length ? emps.join(' | ') : '—');
+      }
+      rows.push(row);
+    });
+
+    // 2. Desglose individual por empleado
+    rows.push([]);
+    rows.push(['Desglose por Empleado']);
+    rows.push(['Empleado', ...dayDates.map(d => `${d.short} (${d.date})`), 'Mañanas', 'Tardes', 'Libres', 'Total Horas (8h/turno)']);
+
+    for (let e = 0; e < employees.length; e++) {
+      const empRow = [employees[e]];
+      let m = 0, t = 0, l = 0;
+      for (let d = 0; d < 7; d++) {
+        const s = matrix[e] ? matrix[e][d] : 'L';
+        if (s === 'M') { m++; empRow.push('Mañana'); }
+        else if (s === 'T') { t++; empRow.push('Tarde'); }
+        else { l++; empRow.push('Libre'); }
+      }
+      empRow.push(m, t, l, `${(m + t) * 8} h`);
+      rows.push(empRow);
+    }
+
+    // Codificación UTF-8 con BOM para que Microsoft Excel abra acentos correctamente
+    const csvContent = '\uFEFF' + rows.map(r => r.map(cell => `"${String(cell || '').replace(/"/g, '""')}"`).join(';')).join('\r\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', startDate ? `cuadrante-${startDate}.csv` : 'cuadrante.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    Toast.show('Cuadrante exportado a Excel (CSV) con éxito.', 'success');
+  }
+};
+
+/* ============================================
+   MODULE: Auditor & Live Balance
+   ============================================ */
+const Auditor = {
+  run(matrix, employees, demand, weekStart) {
+    if (!matrix || !employees || !demand) return;
+
+    const n = employees.length;
+    const dayDates = Renderer._getDayDates(weekStart);
+
+    const demandSummary = document.getElementById('audit-demand-summary');
+    const offdaysSummary = document.getElementById('audit-offdays-summary');
+    const ergonomicsSummary = document.getElementById('audit-ergonomics-summary');
+    const globalBadge = document.getElementById('audit-global-badge');
+    const equityContainer = document.getElementById('equity-table-container');
+
+    if (!demandSummary || !offdaysSummary || !ergonomicsSummary || !globalBadge) return;
+
+    let totalDemandMismatches = 0;
+    let totalOffdayMismatches = 0;
+    let totalFatigueIssues = 0;
+
+    // 1. Demand coverage check
+    demandSummary.innerHTML = '';
+    for (let d = 0; d < 7; d++) {
+      let countM = 0;
+      let countT = 0;
+      for (let e = 0; e < n; e++) {
+        if (matrix[e] && matrix[e][d] === 'M') countM++;
+        else if (matrix[e] && matrix[e][d] === 'T') countT++;
+      }
+      const reqM = (demand.morning && demand.morning[d]) || 0;
+      const reqT = (demand.afternoon && demand.afternoon[d]) || 0;
+
+      const mOk = countM === reqM;
+      const tOk = countT === reqT;
+      if (!mOk || !tOk) totalDemandMismatches++;
+
+      const tag = document.createElement('span');
+      let statusClass = (mOk && tOk) ? 'ok' : 'err';
+      tag.className = `audit-tag audit-tag--${statusClass}`;
+      tag.textContent = `${dayDates[d].short}: M ${countM}/${reqM} · T ${countT}/${reqT}`;
+      tag.title = `${dayDates[d].name}: Mañana ${countM} asignados de ${reqM} requeridos; Tarde ${countT} asignados de ${reqT} requeridos`;
+      demandSummary.appendChild(tag);
+    }
+
+    // 2. Offdays check (2 days off required)
+    offdaysSummary.innerHTML = '';
+    const empStats = [];
+    for (let e = 0; e < n; e++) {
+      let countL = 0;
+      let countM = 0;
+      let countT = 0;
+      for (let d = 0; d < 7; d++) {
+        const s = matrix[e] ? matrix[e][d] : 'L';
+        if (s === 'L') countL++;
+        else if (s === 'M') countM++;
+        else if (s === 'T') countT++;
+      }
+      empStats.push({ name: employees[e], m: countM, t: countT, l: countL, hours: (countM + countT) * 8 });
+
+      const is2Off = countL === 2;
+      if (!is2Off) totalOffdayMismatches++;
+
+      const tag = document.createElement('span');
+      let statusClass = is2Off ? 'ok' : (countL < 2 ? 'err' : 'warn');
+      tag.className = `audit-tag audit-tag--${statusClass}`;
+      tag.textContent = `${employees[e]}: ${countL}/2 Libres`;
+      offdaysSummary.appendChild(tag);
+    }
+
+    // 3. Ergonomics check (T -> M transitions)
+    ergonomicsSummary.innerHTML = '';
+    const fatigueList = [];
+    for (let e = 0; e < n; e++) {
+      for (let d = 0; d < 6; d++) {
+        if (matrix[e] && matrix[e][d] === 'T' && matrix[e][d + 1] === 'M') {
+          fatigueList.push(`${employees[e]}: ${dayDates[d].short} T → ${dayDates[d + 1].short} M`);
+          totalFatigueIssues++;
+        }
+      }
+    }
+
+    if (fatigueList.length === 0) {
+      const tag = document.createElement('span');
+      tag.className = 'audit-tag audit-tag--ok';
+      tag.textContent = 'Descanso óptimo: 0 transiciones T → M ✅';
+      ergonomicsSummary.appendChild(tag);
+    } else {
+      fatigueList.forEach(item => {
+        const tag = document.createElement('span');
+        tag.className = 'audit-tag audit-tag--warn';
+        tag.textContent = item;
+        tag.title = 'Transición de turno de tarde seguido inmediatamente de mañana al día siguiente';
+        ergonomicsSummary.appendChild(tag);
+      });
+    }
+
+    // 4. Global Badge
+    if (totalDemandMismatches === 0 && totalOffdayMismatches === 0 && totalFatigueIssues === 0) {
+      globalBadge.className = 'badge badge--success';
+      globalBadge.textContent = 'Balance Óptimo ✅';
+    } else if (totalDemandMismatches > 0 || totalOffdayMismatches > 0) {
+      globalBadge.className = 'badge badge--danger';
+      const issues = [];
+      if (totalDemandMismatches > 0) issues.push('Demanda');
+      if (totalOffdayMismatches > 0) issues.push('Días libres');
+      globalBadge.textContent = `Ajuste requerido: ${issues.join(' y ')} ⚠️`;
+    } else {
+      globalBadge.className = 'badge badge--warning';
+      globalBadge.textContent = `${totalFatigueIssues} aviso(s) ergonómico(s) T → M ⚠️`;
+    }
+
+    // 5. Equity Table
+    if (equityContainer) {
+      let html = '<table class="equity-table"><thead><tr><th>Empleado</th><th>Turnos Mañana</th><th>Turnos Tarde</th><th>Días Libres</th><th>Horas Semanales</th></tr></thead><tbody>';
+      empStats.forEach(stat => {
+        html += `<tr>
+          <td style="font-weight:600; text-align:left;">${Renderer._escapeHtml(stat.name)}</td>
+          <td><span style="color:var(--color-morning); font-weight:700;">${stat.m}</span></td>
+          <td><span style="color:var(--color-afternoon); font-weight:700;">${stat.t}</span></td>
+          <td><span style="color:var(--color-free); font-weight:700;">${stat.l}</span></td>
+          <td><strong>${stat.hours} h</strong></td>
+        </tr>`;
+      });
+      html += '</tbody></table>';
+      equityContainer.innerHTML = html;
+    }
+  }
+};
+
+/* ============================================
+   MODULE: ShareHelper (WhatsApp & WebShare)
+   ============================================ */
+const ShareHelper = {
+  getShareText(matrix, employees, weekStart) {
+    if (!matrix || !employees) return '';
+    const startDate = weekStart || (Renderer && Renderer.weekStartInput ? Renderer.weekStartInput.value : '');
+    const dayDates = Renderer._getDayDates(startDate);
+
+    let text = `📅 *Cuadrante de Turnos Semanal*\n`;
+    text += `🗓️ Semana del ${Renderer._formatDateLong(startDate)}\n\n`;
+
+    dayDates.forEach((d, dayIdx) => {
+      const morningEmps = [];
+      const afternoonEmps = [];
+      const freeEmps = [];
+
+      for (let e = 0; e < employees.length; e++) {
+        const shift = matrix[e] ? matrix[e][dayIdx] : 'L';
+        if (shift === 'M') morningEmps.push(employees[e]);
+        else if (shift === 'T') afternoonEmps.push(employees[e]);
+        else freeEmps.push(employees[e]);
+      }
+
+      text += `📍 *${d.name} (${d.date})*\n`;
+      text += `☀️ Mañana: ${morningEmps.length ? morningEmps.join(', ') : 'Ninguno'}\n`;
+      text += `🌅 Tarde: ${afternoonEmps.length ? afternoonEmps.join(', ') : 'Ninguno'}\n`;
+      text += `🏖️ Libre: ${freeEmps.length ? freeEmps.join(', ') : 'Ninguno'}\n\n`;
+    });
+
+    return text.trim();
+  },
+
+  async share(matrix, employees, weekStart) {
+    const text = this.getShareText(matrix, employees, weekStart);
+    if (!text) return;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'Cuadrante de Turnos Semanal',
+          text: text,
+        });
+        Toast.show('Cuadrante compartido con éxito.', 'success');
+        return;
+      } catch (err) {
+        if (err.name === 'AbortError') return;
+      }
+    }
+
+    // Fallback portapapeles
+    try {
+      await navigator.clipboard.writeText(text);
+      Toast.show('¡Cuadrante copiado al portapapeles para WhatsApp!', 'success');
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      Toast.show('¡Cuadrante copiado al portapapeles!', 'success');
+    }
+  }
+};
+
+/* ============================================
+   MODULE: IndividualView (Modal)
+   ============================================ */
+const IndividualView = {
+  init() {
+    this.modal = document.getElementById('individual-modal');
+    this.select = document.getElementById('individual-emp-select');
+    this.cardsContainer = document.getElementById('individual-schedule-cards');
+    this.closeBtn = document.getElementById('modal-close');
+    this.copyBtn = document.getElementById('btn-copy-individual');
+
+    if (this.closeBtn) {
+      this.closeBtn.addEventListener('click', () => this.close());
+    }
+    if (this.modal) {
+      this.modal.addEventListener('click', (e) => {
+        if (e.target === this.modal) this.close();
+      });
+    }
+    if (this.select) {
+      this.select.addEventListener('change', () => this.renderSelected());
+    }
+    if (this.copyBtn) {
+      this.copyBtn.addEventListener('click', () => this.copySchedule());
+    }
+  },
+
+  open(matrix, employees, weekStart) {
+    this.matrix = matrix;
+    this.employees = employees;
+    this.weekStart = weekStart;
+
+    if (!this.select) return;
+    this.select.innerHTML = '';
+    employees.forEach((name, idx) => {
+      const opt = document.createElement('option');
+      opt.value = idx;
+      opt.textContent = name;
+      this.select.appendChild(opt);
+    });
+
+    this.renderSelected();
+    this.modal.hidden = false;
+  },
+
+  close() {
+    if (this.modal) this.modal.hidden = true;
+  },
+
+  renderSelected() {
+    if (!this.select || !this.cardsContainer) return;
+    const empIdx = parseInt(this.select.value) || 0;
+    const dayDates = Renderer._getDayDates(this.weekStart);
+    const shiftLabels = { M: 'Mañana', T: 'Tarde', L: 'Libre' };
+    const shiftClasses = { M: 'morning', T: 'afternoon', L: 'free' };
+
+    this.cardsContainer.innerHTML = '';
+    dayDates.forEach((d, dayIdx) => {
+      const shiftKey = (this.matrix && this.matrix[empIdx]) ? this.matrix[empIdx][dayIdx] : 'L';
+      const card = document.createElement('div');
+      card.className = 'indiv-day-card';
+      card.innerHTML = `
+        <div class="indiv-day-name">${d.name}</div>
+        <div class="indiv-day-date">${d.date}</div>
+        <span class="indiv-shift-badge indiv-shift-badge--${shiftClasses[shiftKey] || 'free'}">
+          ${shiftLabels[shiftKey] || 'Libre'}
+        </span>
+      `;
+      this.cardsContainer.appendChild(card);
+    });
+  },
+
+  async copySchedule() {
+    const empIdx = parseInt(this.select.value) || 0;
+    const empName = this.employees[empIdx];
+    const dayDates = Renderer._getDayDates(this.weekStart);
+    const shiftEmojis = { M: '☀️ Mañana', T: '🌅 Tarde', L: '🏖️ Libre' };
+
+    let msg = `👤 *Horario Semanal - ${empName}*\n`;
+    msg += `🗓️ Semana del ${Renderer._formatDateLong(this.weekStart)}\n\n`;
+
+    dayDates.forEach((d, dayIdx) => {
+      const shiftKey = (this.matrix && this.matrix[empIdx]) ? this.matrix[empIdx][dayIdx] : 'L';
+      msg += `• *${d.name} (${d.date})*: ${shiftEmojis[shiftKey] || 'Libre'}\n`;
+    });
+
+    try {
+      await navigator.clipboard.writeText(msg.trim());
+      Toast.show(`Horario de ${empName} copiado para WhatsApp.`, 'success');
+    } catch {
+      Toast.show('No se pudo copiar automáticamente.', 'error');
+    }
+  }
 };
 
 /* ============================================
@@ -691,9 +1151,21 @@ const App = {
   },
 
   init() {
+    Toast.init();
+    Theme.init();
+    IndividualView.init();
     Renderer.init();
     this._bindEvents();
     this._enterApp();
+    this._registerServiceWorker();
+  },
+
+  _registerServiceWorker() {
+    if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
+      navigator.serviceWorker.register('sw.js').catch(err => {
+        console.warn('Service worker registration failed:', err);
+      });
+    }
   },
 
   _enterApp() {
@@ -717,6 +1189,7 @@ const App = {
         }
       }
     }
+    this._updateWeekBadge(Renderer.weekStartInput.value);
   },
 
   _loadSavedState() {
@@ -741,6 +1214,41 @@ const App = {
     Storage.saveConfig(config);
   },
 
+  _updateWeekBadge(weekStr) {
+    const badge = document.getElementById('schedule-week-badge');
+    if (badge && weekStr) {
+      badge.textContent = `Semana del ${Renderer._formatDateLong(weekStr)}`;
+    }
+  },
+
+  navigateWeek(deltaDays) {
+    const currentVal = Renderer.weekStartInput.value;
+    let base = currentVal ? new Date(currentVal + 'T00:00:00') : new Date();
+    base.setDate(base.getDate() + deltaDays);
+    const newWeekStr = Renderer._formatDate(base);
+
+    Renderer.weekStartInput.value = newWeekStr;
+    this.state.weekStart = newWeekStr;
+    this._saveState();
+    this._updateWeekBadge(newWeekStr);
+
+    // Intentar cargar cuadrante específico de esta semana
+    const saved = Storage.loadSchedule(newWeekStr);
+    const names = Renderer.getEmployeeNames();
+
+    if (saved && saved.length === names.length) {
+      Renderer.showSchedule();
+      Renderer.renderSchedule(saved, names, newWeekStr);
+      Renderer.renderPDF(saved, names, newWeekStr);
+      Toast.show(`Cuadrante cargado: semana del ${Renderer._formatDateLong(newWeekStr)}`, 'info', 2500);
+    } else {
+      if (!Renderer.schedulePanel.hidden) {
+        Renderer.showConfig();
+        Toast.show(`Semana del ${Renderer._formatDateLong(newWeekStr)} lista para configurar`, 'info', 2500);
+      }
+    }
+  },
+
   _bindEvents() {
     // Employee count change
     Renderer.employeeCountInput.addEventListener('change', () => {
@@ -755,17 +1263,31 @@ const App = {
     document.querySelectorAll('.demand-input').forEach(input => {
       input.addEventListener('change', () => this._saveState());
     });
-    Renderer.weekStartInput.addEventListener('change', () => this._saveState());
+    Renderer.weekStartInput.addEventListener('change', () => {
+      this._saveState();
+      this._updateWeekBadge(Renderer.weekStartInput.value);
+    });
+
+    // Week navigation buttons
+    const btnPrevWeek = document.getElementById('btn-prev-week');
+    const btnNextWeek = document.getElementById('btn-next-week');
+    const btnSchedPrev = document.getElementById('btn-sched-prev');
+    const btnSchedNext = document.getElementById('btn-sched-next');
+
+    if (btnPrevWeek) btnPrevWeek.addEventListener('click', () => this.navigateWeek(-7));
+    if (btnNextWeek) btnNextWeek.addEventListener('click', () => this.navigateWeek(7));
+    if (btnSchedPrev) btnSchedPrev.addEventListener('click', () => this.navigateWeek(-7));
+    if (btnSchedNext) btnSchedNext.addEventListener('click', () => this.navigateWeek(7));
 
     // Generate schedule
     document.getElementById('btn-generate').addEventListener('click', () => this._generateSchedule());
 
     // Edit (go back to config)
     document.getElementById('btn-edit').addEventListener('click', () => {
-      // Save any manual edits before going back
       const editedMatrix = Renderer.getScheduleFromDOM();
       const names = Renderer.getEmployeeNames();
-      Storage.saveSchedule(editedMatrix);
+      const weekStart = Renderer.weekStartInput.value;
+      Storage.saveSchedule(editedMatrix, weekStart);
       Storage.saveNames(names);
       Renderer.showConfig();
     });
@@ -779,18 +1301,52 @@ const App = {
       Exporter.exportToPDF(weekStart);
     });
 
+    // Export CSV / Excel
+    const btnExportCSV = document.getElementById('btn-export-csv');
+    if (btnExportCSV) {
+      btnExportCSV.addEventListener('click', () => {
+        const matrix = Renderer.getScheduleFromDOM();
+        const names = Renderer.getEmployeeNames();
+        const weekStart = Renderer.weekStartInput.value;
+        Exporter.exportToCSV(matrix, names, weekStart);
+      });
+    }
+
+    // Share by WhatsApp
+    const btnShare = document.getElementById('btn-share');
+    if (btnShare) {
+      btnShare.addEventListener('click', () => {
+        const matrix = Renderer.getScheduleFromDOM();
+        const names = Renderer.getEmployeeNames();
+        const weekStart = Renderer.weekStartInput.value;
+        ShareHelper.share(matrix, names, weekStart);
+      });
+    }
+
+    // Individual employee view
+    const btnIndividual = document.getElementById('btn-individual');
+    if (btnIndividual) {
+      btnIndividual.addEventListener('click', () => {
+        const matrix = Renderer.getScheduleFromDOM();
+        const names = Renderer.getEmployeeNames();
+        const weekStart = Renderer.weekStartInput.value;
+        IndividualView.open(matrix, names, weekStart);
+      });
+    }
+
     // Load saved schedule on startup if available
     window.addEventListener('load', () => {
-      const saved = Storage.loadSchedule();
+      const config = Storage.loadConfig();
+      const weekStart = config && config.weekStart ? config.weekStart : Renderer.weekStartInput.value;
+      const saved = Storage.loadSchedule(weekStart);
       if (saved) {
         const names = Storage.loadNames();
         if (names && saved.length === names.length) {
           this.state.employeeNames = names;
-          const config = Storage.loadConfig();
-          const weekStart = config && config.weekStart ? config.weekStart : Renderer.weekStartInput.value;
           Renderer.showSchedule();
           Renderer.renderSchedule(saved, names, weekStart);
           Renderer.renderPDF(saved, names, weekStart);
+          this._updateWeekBadge(weekStart);
         }
       }
     });
@@ -806,14 +1362,16 @@ const App = {
     const result = Scheduler.generate(employees, demand);
 
     if (!result.success) {
-      alert(result.error);
+      Toast.show(result.error, 'error', 5000);
       return;
     }
 
-    Storage.saveSchedule(result.matrix);
+    Storage.saveSchedule(result.matrix, weekStart);
     Renderer.renderSchedule(result.matrix, employees, weekStart);
     Renderer.renderPDF(result.matrix, employees, weekStart);
+    this._updateWeekBadge(weekStart);
     Renderer.showSchedule();
+    Toast.show('¡Cuadrante semanal generado con éxito!', 'success');
   },
 };
 

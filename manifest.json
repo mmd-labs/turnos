@@ -1,0 +1,19 @@
+{
+  "name": "Gestión de Turnos Laborales",
+  "short_name": "Turnos",
+  "description": "Planificación, generación automática y exportación de cuadrantes de turnos laborales semanales.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f9fafb",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

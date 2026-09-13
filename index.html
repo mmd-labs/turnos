@@ -4,20 +4,44 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Gestión de Turnos Laborales</title>
+  <link rel="icon" type="image/svg+xml" href="icon.svg">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#2563eb">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <link rel="stylesheet" href="style.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" defer></script>
 </head>
 <body>
+  <!-- APP HEADER -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="brand">
+        <img src="icon.svg" alt="Logo" class="brand-icon">
+        <h1 class="brand-title">Gestión de Turnos</h1>
+      </div>
+      <div class="header-actions">
+        <button type="button" id="theme-toggle" class="btn btn-icon" title="Cambiar modo claro / oscuro" aria-label="Cambiar tema">
+          <span id="theme-icon">🌙</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
   <!-- CONFIG PANEL -->
   <section id="config-panel" class="panel-section">
     <div class="section-container">
       <h2 class="section-title">Configuración Semanal</h2>
 
-      <!-- Week selector -->
+      <!-- Week selector with navigation -->
       <div class="config-row">
-        <div class="form-group">
+        <div class="form-group week-nav-group">
           <label for="week-start">Semana del (lunes)</label>
-          <input type="date" id="week-start">
+          <div class="week-nav">
+            <button type="button" id="btn-prev-week" class="btn btn-outline btn-sm" title="Semana anterior">←</button>
+            <input type="date" id="week-start">
+            <button type="button" id="btn-next-week" class="btn btn-outline btn-sm" title="Semana siguiente">→</button>
+          </div>
         </div>
       </div>
 
@@ -32,6 +56,7 @@
       <!-- Employee names -->
       <div class="config-block">
         <h3>Plantilla de Empleados</h3>
+        <p class="config-hint">Los dos primeros empleados actuarán como empleados clave de turno de mañana.</p>
         <div id="employee-names" class="employee-grid"></div>
       </div>
 
@@ -87,12 +112,23 @@
   <section id="schedule-panel" class="panel-section" hidden>
     <div class="section-container">
       <div class="schedule-header">
-        <h2 class="section-title">Cuadrante Semanal</h2>
+        <div class="schedule-title-block">
+          <h2 class="section-title">Cuadrante Semanal</h2>
+          <div class="week-nav-inline">
+            <button type="button" id="btn-sched-prev" class="btn btn-outline btn-sm" title="Semana anterior">← Ant.</button>
+            <span id="schedule-week-badge" class="week-badge"></span>
+            <button type="button" id="btn-sched-next" class="btn btn-outline btn-sm" title="Semana siguiente">Sig. →</button>
+          </div>
+        </div>
         <div class="schedule-actions">
           <button id="btn-edit" class="btn btn-outline">Volver a Configurar</button>
-          <button id="btn-export" class="btn btn-primary">Exportar a PDF</button>
+          <button id="btn-individual" class="btn btn-outline">👤 Vista Individual</button>
+          <button id="btn-share" class="btn btn-outline" title="Compartir por WhatsApp o copiar">📱 Compartir</button>
+          <button id="btn-export-csv" class="btn btn-outline" title="Descargar en formato CSV/Excel">📊 Excel (CSV)</button>
+          <button id="btn-export" class="btn btn-primary">📄 Exportar a PDF</button>
         </div>
       </div>
+
       <div class="table-responsive">
         <table class="schedule-table" id="schedule-table">
           <thead>
@@ -110,8 +146,61 @@
           <tbody id="schedule-body"></tbody>
         </table>
       </div>
+
+      <!-- LIVE AUDIT & BALANCE PANEL -->
+      <div id="audit-panel" class="audit-panel">
+        <div class="audit-header">
+          <div class="audit-title-wrap">
+            <h3 class="audit-title">Auditoría y Balance en Vivo</h3>
+            <span id="audit-global-badge" class="badge badge--success">Balance correcto</span>
+          </div>
+          <p class="audit-subtitle">Supervisión automática de demandas y descansos tras cada ajuste manual</p>
+        </div>
+        <div class="audit-grid">
+          <div class="audit-card">
+            <h4>Cobertura de Demanda Diaria</h4>
+            <div id="audit-demand-summary" class="audit-tags"></div>
+          </div>
+          <div class="audit-card">
+            <h4>Días Libres por Empleado (2 req.)</h4>
+            <div id="audit-offdays-summary" class="audit-tags"></div>
+          </div>
+          <div class="audit-card">
+            <h4>Descanso Ergonómico (T → M)</h4>
+            <div id="audit-ergonomics-summary" class="audit-tags"></div>
+          </div>
+        </div>
+
+        <details class="equity-details">
+          <summary class="equity-summary-toggle">📊 Ver Reparto de Carga y Horas por Empleado</summary>
+          <div id="equity-table-container" class="table-responsive equity-table-container"></div>
+        </details>
+      </div>
     </div>
   </section>
+
+  <!-- INDIVIDUAL EMPLOYEE MODAL -->
+  <div id="individual-modal" class="modal-backdrop" hidden>
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="modal-title">Horario Individual</h3>
+        <button type="button" id="modal-close" class="modal-close-btn" aria-label="Cerrar">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="individual-emp-select">Seleccionar Empleado:</label>
+          <select id="individual-emp-select" class="form-select"></select>
+        </div>
+        <div id="individual-schedule-cards" class="individual-schedule-grid"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" id="btn-copy-individual" class="btn btn-primary">Copiar Horario para WhatsApp</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATIONS CONTAINER -->
+  <div id="toast-container" class="toast-container" aria-live="polite"></div>
 
   <!-- PDF EXPORT CONTAINER (hidden offscreen wrapper, used for capture) -->
   <div id="pdf-export-wrapper" class="pdf-export-wrapper" aria-hidden="true">
