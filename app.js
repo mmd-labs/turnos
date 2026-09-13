@@ -641,18 +641,26 @@ const Renderer = {
 const Exporter = {
   async exportToPDF() {
     const container = document.getElementById('pdf-container');
-    container.style.position = 'absolute';
-    container.style.left = '0';
-    container.style.top = '0';
-    container.style.zIndex = '9999';
+    if (!container) return;
 
-    await new Promise(r => setTimeout(r, 200));
+    const btnExport = document.getElementById('btn-export');
+    const originalText = btnExport ? btnExport.textContent : '';
+    if (btnExport) {
+      btnExport.disabled = true;
+      btnExport.textContent = 'Generando PDF...';
+    }
 
     const opt = {
-      margin: [10, 10, 10, 10],
+      margin: [8, 8, 8, 8],
       filename: 'cuadrante-turnos.pdf',
       image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true },
+      html2canvas: {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        scrollY: 0,
+        scrollX: 0,
+      },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
     };
 
@@ -662,10 +670,10 @@ const Exporter = {
       console.error('Error exporting PDF:', err);
       alert('Error al exportar el PDF. Inténtalo de nuevo.');
     } finally {
-      container.style.position = 'absolute';
-      container.style.left = '-9999px';
-      container.style.top = '0';
-      container.style.zIndex = '';
+      if (btnExport) {
+        btnExport.disabled = false;
+        btnExport.textContent = originalText;
+      }
     }
   },
 };

@@ -56,22 +56,22 @@
             <tbody>
               <tr>
                 <td class="row-label row-label--morning">Mañana</td>
-                <td><input type="number" class="demand-input" data-shift="morning" data-day="0" min="0" value="4"></td>
+                <td><input type="number" class="demand-input" data-shift="morning" data-day="0" min="0" value="3"></td>
                 <td><input type="number" class="demand-input" data-shift="morning" data-day="1" min="0" value="3"></td>
                 <td><input type="number" class="demand-input" data-shift="morning" data-day="2" min="0" value="3"></td>
                 <td><input type="number" class="demand-input" data-shift="morning" data-day="3" min="0" value="3"></td>
-                <td><input type="number" class="demand-input" data-shift="morning" data-day="4" min="0" value="4"></td>
+                <td><input type="number" class="demand-input" data-shift="morning" data-day="4" min="0" value="3"></td>
                 <td><input type="number" class="demand-input" data-shift="morning" data-day="5" min="0" value="3"></td>
                 <td><input type="number" class="demand-input" data-shift="morning" data-day="6" min="0" value="2"></td>
               </tr>
               <tr>
                 <td class="row-label row-label--afternoon">Tarde</td>
                 <td><input type="number" class="demand-input" data-shift="afternoon" data-day="0" min="0" value="3"></td>
-                <td><input type="number" class="demand-input" data-shift="afternoon" data-day="1" min="0" value="4"></td>
+                <td><input type="number" class="demand-input" data-shift="afternoon" data-day="1" min="0" value="3"></td>
                 <td><input type="number" class="demand-input" data-shift="afternoon" data-day="2" min="0" value="3"></td>
-                <td><input type="number" class="demand-input" data-shift="afternoon" data-day="3" min="0" value="4"></td>
+                <td><input type="number" class="demand-input" data-shift="afternoon" data-day="3" min="0" value="3"></td>
                 <td><input type="number" class="demand-input" data-shift="afternoon" data-day="4" min="0" value="3"></td>
-                <td><input type="number" class="demand-input" data-shift="afternoon" data-day="5" min="0" value="4"></td>
+                <td><input type="number" class="demand-input" data-shift="afternoon" data-day="5" min="0" value="3"></td>
                 <td><input type="number" class="demand-input" data-shift="afternoon" data-day="6" min="0" value="2"></td>
               </tr>
             </tbody>
@@ -113,27 +113,29 @@
     </div>
   </section>
 
-  <!-- PDF EXPORT CONTAINER (hidden, used for capture) -->
-  <div id="pdf-container" class="pdf-container">
-    <div id="pdf-header" class="pdf-header">
-      <h1>Cuadrante de Turnos Semanal</h1>
-      <p id="pdf-week-range"></p>
+  <!-- PDF EXPORT CONTAINER (hidden offscreen wrapper, used for capture) -->
+  <div id="pdf-export-wrapper" class="pdf-export-wrapper" aria-hidden="true">
+    <div id="pdf-container" class="pdf-container">
+      <div id="pdf-header" class="pdf-header">
+        <h1>Cuadrante de Turnos Semanal</h1>
+        <p id="pdf-week-range"></p>
+      </div>
+      <table class="pdf-table" id="pdf-table">
+        <thead>
+          <tr id="pdf-head-row">
+            <th class="pdf-col-shift">Turno</th>
+            <th>Lunes</th>
+            <th>Martes</th>
+            <th>Miércoles</th>
+            <th>Jueves</th>
+            <th>Viernes</th>
+            <th>Sábado</th>
+            <th>Domingo</th>
+          </tr>
+        </thead>
+        <tbody id="pdf-body"></tbody>
+      </table>
     </div>
-    <table class="pdf-table" id="pdf-table">
-      <thead>
-        <tr id="pdf-head-row">
-          <th class="pdf-col-shift">Turno</th>
-          <th>Lunes</th>
-          <th>Martes</th>
-          <th>Miércoles</th>
-          <th>Jueves</th>
-          <th>Viernes</th>
-          <th>Sábado</th>
-          <th>Domingo</th>
-        </tr>
-      </thead>
-      <tbody id="pdf-body"></tbody>
-    </table>
   </div>
 
   <script src="app.js"></script>
