@@ -83,6 +83,16 @@ const Scheduler = {
       totalDemand += demandM[d] + demandT[d];
     }
 
+    // Daily capacity check
+    for (let d = 0; d < 7; d++) {
+      if (demandM[d] + demandT[d] > n) {
+        return {
+          success: false,
+          error: `La demanda del ${DAYS_FULL[d]} (${demandM[d] + demandT[d]} turnos) supera la cantidad total de empleados (${n}).`,
+        };
+      }
+    }
+
     // Total capacity: each employee works (7 - DAYS_OFF_PER_EMPLOYEE) days
     const workDaysPerEmployee = 7 - DAYS_OFF_PER_EMPLOYEE;
     const totalCapacity = n * workDaysPerEmployee;
@@ -98,8 +108,8 @@ const Scheduler = {
     const matrix = Array.from({ length: n }, () => Array(7).fill(null));
     const offCount = Array(7).fill(0); // how many employees are off per day
 
-    // ---- PHASE 1: Emp 1 & 2 (index 0,1) ----
-    // Find the 2 days with lowest total demand to give them off
+    // ---- PHASE 1: Emp 1 & 2 (index 0, 1) ----
+    // Key employees: restricted to Morning only and take off together on lowest demand days
     const dayDemand = [];
     for (let d = 0; d < 7; d++) {
       dayDemand[d] = { day: d, total: demandM[d] + demandT[d] };
@@ -109,51 +119,35 @@ const Scheduler = {
 
     for (const d of offDaysEmp12) {
       matrix[0][d] = 'L';
-      offCount[d] += 1;
+      matrix[1][d] = 'L';
+      offCount[d] += 2;
     }
 
-    // Emp 1 works Morning on their working days
+    // Emp 1 & 2 work Morning on their working days
     for (let d = 0; d < 7; d++) {
-      if (matrix[0][d] === null) {
-        matrix[0][d] = 'M';
-      }
+      if (matrix[0][d] === null) matrix[0][d] = 'M';
+      if (matrix[1][d] === null) matrix[1][d] = 'M';
     }
 
-    // ---- PHASE 2: Distribute off days for Emp 3..N ----
-    // For each day, calculate remaining demand after Emp 1&2
-    const remainingDemand = [];
+    // ---- PHASE 2: Distribute off days for Emp 3..N (indices 2 to n - 1) ----
+    const maxRemainingOffPerDay = [];
     for (let d = 0; d < 7; d++) {
-      const emp12Contrib = (offCount[d] < 2) ? 2 : 0; // they work if not off
-      remainingDemand[d] = demandM[d] + demandT[d] - emp12Contrib;
+      const maxTotalOff = Math.max(0, n - (demandM[d] + demandT[d]));
+      maxRemainingOffPerDay[d] = Math.max(0, maxTotalOff - offCount[d]);
     }
 
-    // Max off per day = remaining available staff - remaining demand
-    // Remaining available staff = (n - 2) - offCount_from_remaining[d]
-    // offCount[d] already includes Emp1&2, so remaining_off[d] = offCount[d] - (Emp1&2 off count)
-    const maxOffPerDay = [];
-    for (let d = 0; d < 7; d++) {
-      const emp12OffCount = offDaysEmp12.includes(d) ? 2 : 0;
-      const remainingStaff = (n - 2);
-      maxOffPerDay[d] = remainingStaff - remainingDemand[d];
-      if (maxOffPerDay[d] < 0) maxOffPerDay[d] = 0;
-    }
+    // Assign off days to remaining employees
+    const offAssigned = Array(7).fill(0);
 
-    // Assign off days to remaining employees using greedy approach
-    // Each employee needs exactly DAYS_OFF_PER_EMPLOYEE off days
-    const offAssigned = Array(7).fill(0); // count of remaining employees off per day
-
-    for (let emp = 1; emp < n; emp++) {
+    for (let emp = 2; emp < n; emp++) {
       let daysOff = 0;
-      // Find days where we can still assign off (haven't exceeded max)
-      // Sort days by remaining capacity (most room first) to spread out off days
       const candidates = [];
       for (let d = 0; d < 7; d++) {
-        const remaining = maxOffPerDay[d] - offAssigned[d];
+        const remaining = maxRemainingOffPerDay[d] - offAssigned[d];
         if (remaining > 0) {
           candidates.push({ day: d, remaining });
         }
       }
-      // Sort by remaining capacity descending
       candidates.sort((a, b) => b.remaining - a.remaining);
 
       for (const c of candidates) {
@@ -165,8 +159,7 @@ const Scheduler = {
       }
 
       if (daysOff < DAYS_OFF_PER_EMPLOYEE) {
-        // Try to force assign even if it means exceeding ideal max
-        // (this happens when demand is tight)
+        // Fallback if demand distribution is tight
         for (let d = 0; d < 7 && daysOff < DAYS_OFF_PER_EMPLOYEE; d++) {
           if (matrix[emp][d] === null) {
             matrix[emp][d] = 'L';
@@ -185,31 +178,35 @@ const Scheduler = {
     }
 
     // ---- PHASE 3: Assign M/T for remaining employees ----
-    // For each day, we need demandM[d] morning workers and demandT[d] afternoon workers
-    // Track per-employee M/T counts for balancing
     const mCount = Array(n).fill(0);
     const tCount = Array(n).fill(0);
 
-    // Already set Emp 1 as M
-    for (let d = 0; d < 7; d++) {
-      if (matrix[0][d] === 'M') mCount[0]++;
+    // Register shifts already assigned to Emp 1 & 2
+    for (let emp = 0; emp < 2; emp++) {
+      for (let d = 0; d < 7; d++) {
+        if (matrix[emp][d] === 'M') mCount[emp]++;
+      }
     }
 
     // For each day, assign shifts to remaining employees
     for (let d = 0; d < 7; d++) {
+      // Accurately count morning and afternoon shifts already assigned on day d
+      let mAssigned = 0;
+      let tAssigned = 0;
+      for (let emp = 0; emp < 2; emp++) {
+        if (matrix[emp][d] === 'M') mAssigned++;
+        else if (matrix[emp][d] === 'T') tAssigned++;
+      }
+
       const workingEmps = [];
-      for (let emp = 1; emp < n; emp++) {
+      for (let emp = 2; emp < n; emp++) {
         if (matrix[emp][d] === null) {
           workingEmps.push(emp);
         }
       }
 
-      // We need demandM[d] morning and demandT[d] afternoon from these employees
-      // Sort employees by M/T ratio to balance: prefer to give M to those with fewer M's
-      workingEmps.sort((a, b) => mCount[a] - mCount[b]);
-
-      let mAssigned = 0;
-      let tAssigned = 0;
+      // Balance M and T: prioritize giving M to employees with fewer M relative to T
+      workingEmps.sort((a, b) => (mCount[a] - tCount[a]) - (mCount[b] - tCount[b]));
 
       for (const emp of workingEmps) {
         if (mAssigned < demandM[d]) {
@@ -221,20 +218,23 @@ const Scheduler = {
           tCount[emp]++;
           tAssigned++;
         } else {
-          // Extra workers beyond demand: assign to balance M/T
+          // Extra workers beyond exact demand: assign to balance employee workload
           if (mCount[emp] <= tCount[emp]) {
             matrix[emp][d] = 'M';
             mCount[emp]++;
+            mAssigned++;
           } else {
             matrix[emp][d] = 'T';
             tCount[emp]++;
+            tAssigned++;
           }
         }
       }
     }
 
     // ---- PHASE 4: Ergonomic optimization (avoid T -> M transitions) ----
-    this._fixErgonomics(matrix, n, mCount, tCount);
+    // Preserves strictly exact days off per employee and daily demand counts
+    this._fixErgonomics(matrix, n);
 
     // Verify no nulls remain
     for (let emp = 0; emp < n; emp++) {
@@ -248,39 +248,74 @@ const Scheduler = {
     return { success: true, matrix, error: null };
   },
 
-  _fixErgonomics(matrix, n, mCount, tCount) {
-    // Simple pass: for each employee, if T on day d and M on day d+1, try to swap with another employee
-    for (let pass = 0; pass < 3; pass++) {
+  _fixErgonomics(matrix, n) {
+    const countViolations = (emp) => {
+      let v = 0;
+      for (let d = 0; d < 6; d++) {
+        if (matrix[emp][d] === 'T' && matrix[emp][d + 1] === 'M') {
+          v++;
+        }
+      }
+      return v;
+    };
+
+    // Emp 1 & 2 are restricted to morning shifts only; eligible employees are index 2 to n-1
+    const eligibleStart = 2;
+
+    for (let pass = 0; pass < 5; pass++) {
       let improved = false;
-      for (let emp = 1; emp < n; emp++) {
+      for (let emp1 = eligibleStart; emp1 < n; emp1++) {
         for (let d = 0; d < 6; d++) {
-          if (matrix[emp][d] === 'T' && matrix[emp][d + 1] === 'M') {
-            // Try to find another employee to swap with
-            for (let emp2 = emp + 1; emp2 < n; emp2++) {
-              if (matrix[emp2][d] === 'M' && matrix[emp2][d + 1] === 'T') {
-                // Swap both days
-                matrix[emp][d] = 'M';
-                matrix[emp][d + 1] = 'T';
+          if (matrix[emp1][d] === 'T' && matrix[emp1][d + 1] === 'M') {
+            // Attempt 1: Swap shift on day d with another employee who works 'M' on day d
+            for (let emp2 = eligibleStart; emp2 < n; emp2++) {
+              if (emp1 === emp2) continue;
+              // Both must be working shifts ('M' <-> 'T'), never touching 'L'
+              if (matrix[emp2][d] === 'M') {
+                const before = countViolations(emp1) + countViolations(emp2);
+                matrix[emp1][d] = 'M';
                 matrix[emp2][d] = 'T';
-                matrix[emp2][d + 1] = 'M';
-                improved = true;
-                break;
-              }
-              if (matrix[emp2][d] === 'M' && matrix[emp2][d + 1] === 'L') {
-                // Swap to break T->M
-                matrix[emp][d] = 'M';
-                matrix[emp][d + 1] = 'L';
-                matrix[emp2][d] = 'T';
-                matrix[emp2][d + 1] = 'M';
-                improved = true;
-                break;
+                const after = countViolations(emp1) + countViolations(emp2);
+
+                if (after < before) {
+                  improved = true;
+                  break;
+                } else {
+                  // Revert swap
+                  matrix[emp1][d] = 'T';
+                  matrix[emp2][d] = 'M';
+                }
               }
             }
+
+            if (improved) break;
+
+            // Attempt 2: Swap shift on day d+1 with another employee who works 'T' on day d+1
+            for (let emp2 = eligibleStart; emp2 < n; emp2++) {
+              if (emp1 === emp2) continue;
+              // Both must be working shifts ('M' <-> 'T'), never touching 'L'
+              if (matrix[emp2][d + 1] === 'T') {
+                const before = countViolations(emp1) + countViolations(emp2);
+                matrix[emp1][d + 1] = 'T';
+                matrix[emp2][d + 1] = 'M';
+                const after = countViolations(emp1) + countViolations(emp2);
+
+                if (after < before) {
+                  improved = true;
+                  break;
+                } else {
+                  // Revert swap
+                  matrix[emp1][d + 1] = 'M';
+                  matrix[emp2][d + 1] = 'T';
+                }
+              }
+            }
+
             if (improved) break;
           }
         }
-        if (improved) break;
       }
+
       if (!improved) break;
     }
   },
@@ -361,54 +396,123 @@ const Renderer = {
     return demand;
   },
 
-  renderSchedule(matrix, employees) {
-    this.scheduleBody.innerHTML = '';
-    for (let emp = 0; emp < employees.length; emp++) {
-      const tr = document.createElement('tr');
-      const tdName = document.createElement('td');
-      tdName.textContent = employees[emp];
-      tr.appendChild(tdName);
+  renderSchedule(matrix, employees, weekStart) {
+    this.currentMatrix = matrix;
+    this.currentEmployees = employees;
+    this.currentWeekStart = weekStart || this.weekStartInput.value;
 
+    const dayInfo = this._getDayDates(this.currentWeekStart);
+
+    // 1. Render Table Header: Turno + Day names & dates
+    const headRow = document.getElementById('schedule-head-row');
+    if (headRow) {
+      headRow.innerHTML = '<th class="col-shift">Turno</th>';
+      dayInfo.forEach(d => {
+        const th = document.createElement('th');
+        th.className = 'day-col-header';
+        th.innerHTML = `
+          <div class="day-header-name">${d.name}</div>
+          <div class="day-header-date">${d.date}</div>
+        `;
+        headRow.appendChild(th);
+      });
+    }
+
+    // 2. Render Table Body: 3 rows (Mañana, Tarde, Libre)
+    this.scheduleBody.innerHTML = '';
+    const shiftDefs = [
+      { key: 'M', label: 'Mañana', cssClass: 'morning' },
+      { key: 'T', label: 'Tarde', cssClass: 'afternoon' },
+      { key: 'L', label: 'Libre', cssClass: 'free' },
+    ];
+
+    shiftDefs.forEach(shift => {
+      const tr = document.createElement('tr');
+
+      // Shift Label Column
+      const tdLabel = document.createElement('td');
+      tdLabel.className = `row-label row-label--${shift.cssClass}`;
+      tdLabel.textContent = shift.label;
+      tr.appendChild(tdLabel);
+
+      // 7 Day Columns
       for (let d = 0; d < 7; d++) {
         const td = document.createElement('td');
-        const select = document.createElement('select');
-        select.className = 'schedule-select';
-        select.dataset.emp = emp;
-        select.dataset.day = d;
+        td.className = `shift-cell shift-cell--${shift.cssClass}`;
 
-        ['M', 'T', 'L'].forEach(val => {
-          const opt = document.createElement('option');
-          opt.value = val;
-          opt.textContent = val;
-          if (matrix[emp][d] === val) opt.selected = true;
-          select.appendChild(opt);
-        });
+        const listContainer = document.createElement('div');
+        listContainer.className = 'employee-pill-list';
 
-        this._applyShiftClass(select);
-        select.addEventListener('change', () => {
-          this._applyShiftClass(select);
-          this._updatePDFBody(matrix, employees);
-        });
+        const assignedEmps = [];
+        for (let emp = 0; emp < employees.length; emp++) {
+          if (matrix[emp] && matrix[emp][d] === shift.key) {
+            assignedEmps.push(emp);
+          }
+        }
 
-        td.appendChild(select);
+        if (assignedEmps.length === 0) {
+          const emptySpan = document.createElement('span');
+          emptySpan.className = 'empty-shift-notice';
+          emptySpan.textContent = '—';
+          listContainer.appendChild(emptySpan);
+        } else {
+          assignedEmps.forEach(empIdx => {
+            const pill = document.createElement('div');
+            pill.className = `employee-pill employee-pill--${shift.cssClass}`;
+
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'employee-pill-name';
+            nameSpan.textContent = employees[empIdx];
+            nameSpan.title = employees[empIdx];
+            pill.appendChild(nameSpan);
+
+            // Shift selector for manual changes
+            const select = document.createElement('select');
+            select.className = 'employee-shift-select';
+            select.dataset.emp = empIdx;
+            select.dataset.day = d;
+            select.title = 'Cambiar turno';
+
+            ['M', 'T', 'L'].forEach(val => {
+              const opt = document.createElement('option');
+              opt.value = val;
+              opt.textContent = val;
+              if (val === shift.key) opt.selected = true;
+              select.appendChild(opt);
+            });
+
+            select.addEventListener('change', (e) => {
+              const newShift = e.target.value;
+              this.currentMatrix[empIdx][d] = newShift;
+              Storage.saveSchedule(this.currentMatrix);
+              this.renderSchedule(this.currentMatrix, this.currentEmployees, this.currentWeekStart);
+              this.renderPDF(this.currentMatrix, this.currentEmployees, this.currentWeekStart);
+            });
+
+            pill.appendChild(select);
+            listContainer.appendChild(pill);
+          });
+        }
+
+        td.appendChild(listContainer);
         tr.appendChild(td);
       }
+
       this.scheduleBody.appendChild(tr);
-    }
+    });
   },
 
   getScheduleFromDOM() {
-    const selects = this.scheduleBody.querySelectorAll('.schedule-select');
-    const matrix = [];
-    // Find max emp index
+    if (this.currentMatrix) {
+      return this.currentMatrix;
+    }
+    const selects = this.scheduleBody.querySelectorAll('.employee-shift-select');
     let maxEmp = 0;
     selects.forEach(s => {
       const emp = parseInt(s.dataset.emp);
       if (emp > maxEmp) maxEmp = emp;
     });
-    for (let i = 0; i <= maxEmp; i++) {
-      matrix[i] = Array(7).fill('L');
-    }
+    const matrix = Array.from({ length: maxEmp + 1 }, () => Array(7).fill('L'));
     selects.forEach(s => {
       const emp = parseInt(s.dataset.emp);
       const day = parseInt(s.dataset.day);
@@ -418,32 +522,96 @@ const Renderer = {
   },
 
   renderPDF(matrix, employees, weekStart) {
-    this.pdfWeekRange.textContent = `Semana del ${this._formatDateLong(weekStart)}`;
+    const start = weekStart || this.weekStartInput.value;
+    this.pdfWeekRange.textContent = `Semana del ${this._formatDateLong(start)}`;
+    const dayInfo = this._getDayDates(start);
+
+    // 1. Render PDF Header Row
+    const pdfHeadRow = document.getElementById('pdf-head-row');
+    if (pdfHeadRow) {
+      pdfHeadRow.innerHTML = '<th class="pdf-col-shift">Turno</th>';
+      dayInfo.forEach(d => {
+        const th = document.createElement('th');
+        th.innerHTML = `
+          <div class="pdf-header-name">${d.name}</div>
+          <div class="pdf-header-date">${d.date}</div>
+        `;
+        pdfHeadRow.appendChild(th);
+      });
+    }
+
+    // 2. Render PDF Table Body: 3 rows (Mañana, Tarde, Libre)
     this.pdfBody.innerHTML = '';
-    for (let emp = 0; emp < employees.length; emp++) {
+    const shiftDefs = [
+      { key: 'M', label: 'Mañana', cssClass: 'morning' },
+      { key: 'T', label: 'Tarde', cssClass: 'afternoon' },
+      { key: 'L', label: 'Libre', cssClass: 'free' },
+    ];
+
+    shiftDefs.forEach(shift => {
       const tr = document.createElement('tr');
-      const tdName = document.createElement('td');
-      tdName.textContent = employees[emp];
-      tr.appendChild(tdName);
+
+      const tdLabel = document.createElement('td');
+      tdLabel.className = `pdf-row-label pdf-row-label--${shift.cssClass}`;
+      tdLabel.textContent = shift.label;
+      tr.appendChild(tdLabel);
 
       for (let d = 0; d < 7; d++) {
         const td = document.createElement('td');
-        const val = matrix[emp][d];
-        td.textContent = val;
-        if (val === 'M') td.className = 'pdf-cell-morning';
-        else if (val === 'T') td.className = 'pdf-cell-afternoon';
-        else td.className = 'pdf-cell-free';
+        td.className = `pdf-shift-cell pdf-cell-${shift.cssClass}`;
+
+        const assignedEmps = [];
+        for (let emp = 0; emp < employees.length; emp++) {
+          if (matrix[emp] && matrix[emp][d] === shift.key) {
+            assignedEmps.push(employees[emp]);
+          }
+        }
+
+        if (assignedEmps.length === 0) {
+          const empty = document.createElement('span');
+          empty.className = 'pdf-empty';
+          empty.textContent = '—';
+          td.appendChild(empty);
+        } else {
+          assignedEmps.forEach(name => {
+            const div = document.createElement('div');
+            div.className = 'pdf-emp-name';
+            div.textContent = name;
+            td.appendChild(div);
+          });
+        }
+
         tr.appendChild(td);
       }
+
       this.pdfBody.appendChild(tr);
-    }
+    });
   },
 
-  _applyShiftClass(select) {
-    select.classList.remove('shift-morning', 'shift-afternoon', 'shift-free');
-    if (select.value === 'M') select.classList.add('shift-morning');
-    else if (select.value === 'T') select.classList.add('shift-afternoon');
-    else select.classList.add('shift-free');
+  _getDayDates(weekStartStr) {
+    let base;
+    if (weekStartStr) {
+      base = new Date(weekStartStr + 'T00:00:00');
+    } else {
+      base = new Date();
+      const day = base.getDay();
+      const diff = day === 0 ? 1 : (8 - day) % 7 || 7;
+      base.setDate(base.getDate() + diff);
+    }
+    const dates = [];
+    for (let d = 0; d < 7; d++) {
+      const cur = new Date(base);
+      cur.setDate(base.getDate() + d);
+      const dayNum = String(cur.getDate()).padStart(2, '0');
+      const monthNum = String(cur.getMonth() + 1).padStart(2, '0');
+      dates.push({
+        name: DAYS_FULL[d],
+        short: DAYS[d],
+        date: `${dayNum}/${monthNum}`,
+        fullDate: `${dayNum}/${monthNum}/${cur.getFullYear()}`,
+      });
+    }
+    return dates;
   },
 
   _escapeHtml(str) {
@@ -465,13 +633,6 @@ const Renderer = {
       day: 'numeric', month: 'long', year: 'numeric',
     });
   },
-
-  _updatePDFBody(matrix, employees) {
-    // Sync DOM selects back to matrix for PDF
-    const liveMatrix = this.getScheduleFromDOM();
-    const weekStart = document.getElementById('week-start').value;
-    this.renderPDF(liveMatrix, employees, weekStart);
-  },
 };
 
 /* ============================================
@@ -483,7 +644,9 @@ const Exporter = {
     container.style.position = 'absolute';
     container.style.left = '0';
     container.style.top = '0';
-    container.style.zIndex = '-1';
+    container.style.zIndex = '9999';
+
+    await new Promise(r => setTimeout(r, 200));
 
     const opt = {
       margin: [10, 10, 10, 10],
@@ -502,6 +665,7 @@ const Exporter = {
       container.style.position = 'absolute';
       container.style.left = '-9999px';
       container.style.top = '0';
+      container.style.zIndex = '';
     }
   },
 };
@@ -612,9 +776,10 @@ const App = {
         if (names && saved.length === names.length) {
           this.state.employeeNames = names;
           const config = Storage.loadConfig();
+          const weekStart = config && config.weekStart ? config.weekStart : Renderer.weekStartInput.value;
           Renderer.showSchedule();
-          Renderer.renderSchedule(saved, names);
-          Renderer.renderPDF(saved, names, config ? config.weekStart : '');
+          Renderer.renderSchedule(saved, names, weekStart);
+          Renderer.renderPDF(saved, names, weekStart);
         }
       }
     });
@@ -635,7 +800,7 @@ const App = {
     }
 
     Storage.saveSchedule(result.matrix);
-    Renderer.renderSchedule(result.matrix, employees);
+    Renderer.renderSchedule(result.matrix, employees, weekStart);
     Renderer.renderPDF(result.matrix, employees, weekStart);
     Renderer.showSchedule();
   },

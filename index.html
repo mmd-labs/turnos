@@ -96,15 +96,15 @@
       <div class="table-responsive">
         <table class="schedule-table" id="schedule-table">
           <thead>
-            <tr>
-              <th class="col-employee">Empleado</th>
-              <th>Lun</th>
-              <th>Mar</th>
-              <th>Mié</th>
-              <th>Jue</th>
-              <th>Vie</th>
-              <th>Sáb</th>
-              <th>Dom</th>
+            <tr id="schedule-head-row">
+              <th class="col-shift">Turno</th>
+              <th>Lunes</th>
+              <th>Martes</th>
+              <th>Miércoles</th>
+              <th>Jueves</th>
+              <th>Viernes</th>
+              <th>Sábado</th>
+              <th>Domingo</th>
             </tr>
           </thead>
           <tbody id="schedule-body"></tbody>
@@ -121,8 +121,8 @@
     </div>
     <table class="pdf-table" id="pdf-table">
       <thead>
-        <tr>
-          <th>Empleado</th>
+        <tr id="pdf-head-row">
+          <th class="pdf-col-shift">Turno</th>
           <th>Lunes</th>
           <th>Martes</th>
           <th>Miércoles</th>
@@ -134,11 +134,6 @@
       </thead>
       <tbody id="pdf-body"></tbody>
     </table>
-    <div class="pdf-legend">
-      <span><strong>M</strong> = Mañana</span>
-      <span><strong>T</strong> = Tarde</span>
-      <span><strong>L</strong> = Libre</span>
-    </div>
   </div>
 
   <script src="app.js"></script>

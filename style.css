@@ -43,45 +43,6 @@ body {
 }
 
 /* ============================================
-   HEADER
-   ============================================ */
-.app-header {
-  background: var(--color-surface);
-  border-bottom: 1px solid var(--color-border);
-  padding: 0 1.5rem;
-  height: 60px;
-  position: sticky;
-  top: 0;
-  z-index: 100;
-}
-
-.header-content {
-  max-width: 1200px;
-  margin: 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 100%;
-}
-
-.app-title {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: var(--color-primary);
-}
-
-.header-user {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-#header-username {
-  font-size: 0.875rem;
-  color: var(--color-text-secondary);
-}
-
-/* ============================================
    BUTTONS
    ============================================ */
 .btn {
@@ -125,52 +86,9 @@ body {
   background: var(--color-bg);
 }
 
-.btn-sm {
-  padding: 0.3rem 0.75rem;
-  font-size: 0.8125rem;
-}
-
 .btn-lg {
   padding: 0.75rem 1.5rem;
   font-size: 1rem;
-}
-
-.btn-block {
-  width: 100%;
-}
-
-/* ============================================
-   LOGIN PANEL
-   ============================================ */
-.panel-login {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 100vh;
-  padding: 1.5rem;
-}
-
-.login-card {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
-  padding: 2.5rem;
-  width: 100%;
-  max-width: 400px;
-}
-
-.login-logo {
-  text-align: center;
-  margin-bottom: 1.5rem;
-  color: var(--color-primary);
-}
-
-.login-card h2 {
-  text-align: center;
-  font-size: 1.5rem;
-  font-weight: 700;
-  margin-bottom: 1.5rem;
 }
 
 /* ============================================
@@ -189,7 +107,6 @@ body {
 }
 
 .form-group input[type="text"],
-.form-group input[type="password"],
 .form-group input[type="date"],
 .form-group input[type="number"] {
   width: 100%;
@@ -205,16 +122,6 @@ body {
   outline: none;
   border-color: var(--color-primary);
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
-}
-
-.form-error {
-  background: var(--color-danger-bg);
-  color: var(--color-danger);
-  padding: 0.5rem 0.75rem;
-  border-radius: var(--radius);
-  font-size: 0.8125rem;
-  margin-bottom: 1rem;
-  text-align: center;
 }
 
 /* ============================================
@@ -358,74 +265,160 @@ body {
 
 .schedule-table {
   width: 100%;
+  min-width: 950px;
   border-collapse: collapse;
   font-size: 0.875rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  overflow: hidden;
 }
 
 .schedule-table th,
 .schedule-table td {
-  padding: 0.625rem 0.5rem;
-  text-align: center;
   border: 1px solid var(--color-border);
 }
 
-.schedule-table th {
+.schedule-table thead th {
   background: var(--color-bg);
-  font-weight: 600;
-  font-size: 0.8125rem;
-  color: var(--color-text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.025em;
-}
-
-.col-employee {
-  text-align: left !important;
-  min-width: 140px;
-  padding-left: 1rem !important;
-}
-
-.schedule-table td:first-child {
-  text-align: left;
-  font-weight: 500;
-  padding-left: 1rem;
-  white-space: nowrap;
-}
-
-.schedule-select {
-  width: 52px;
-  padding: 0.3rem 0.25rem;
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
+  padding: 0.75rem 0.5rem;
   text-align: center;
-  font-size: 0.9375rem;
+  vertical-align: middle;
+}
+
+.col-shift {
+  width: 120px;
+  min-width: 120px;
+  font-size: 0.8125rem;
   font-weight: 700;
-  cursor: pointer;
-  appearance: none;
-  -webkit-appearance: none;
-  background-repeat: no-repeat;
-  background-position: right 4px center;
-  background-size: 10px;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+  letter-spacing: 0.03em;
+  background: var(--color-bg);
 }
 
-.schedule-select:focus {
-  outline: none;
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+.day-col-header {
+  min-width: 120px;
 }
 
-.shift-morning {
-  background-color: var(--color-morning-bg);
+.day-header-name {
+  font-weight: 700;
+  font-size: 0.875rem;
+  color: var(--color-text);
+}
+
+.day-header-date {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-primary);
+  margin-top: 2px;
+}
+
+.row-label {
+  font-weight: 700;
+  text-align: center;
+  vertical-align: middle;
+  padding: 1rem 0.75rem;
+  font-size: 0.9375rem;
+}
+
+.row-label--morning {
+  background: var(--color-morning-bg);
   color: var(--color-morning);
 }
 
-.shift-afternoon {
-  background-color: var(--color-afternoon-bg);
+.row-label--afternoon {
+  background: var(--color-afternoon-bg);
   color: var(--color-afternoon);
 }
 
-.shift-free {
-  background-color: var(--color-free-bg);
+.row-label--free {
+  background: var(--color-free-bg);
   color: var(--color-free);
+}
+
+.shift-cell {
+  vertical-align: top;
+  padding: 0.5rem;
+  background: var(--color-surface);
+}
+
+.shift-cell--morning {
+  background-color: #fafcff;
+}
+
+.shift-cell--afternoon {
+  background-color: #fffbf7;
+}
+
+.shift-cell--free {
+  background-color: #fbfbfb;
+}
+
+.employee-pill-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.employee-pill {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  padding: 0.35rem 0.5rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition);
+}
+
+.employee-pill--morning {
+  border-left: 3px solid var(--color-morning);
+}
+
+.employee-pill--afternoon {
+  border-left: 3px solid var(--color-afternoon);
+}
+
+.employee-pill--free {
+  border-left: 3px solid var(--color-free);
+  color: var(--color-text-secondary);
+}
+
+.employee-pill-name {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.employee-shift-select {
+  padding: 0.15rem 0.3rem;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: var(--color-bg);
+  cursor: pointer;
+  color: var(--color-text);
+  line-height: 1;
+}
+
+.employee-shift-select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.empty-shift-notice {
+  display: block;
+  text-align: center;
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+  padding: 0.5rem 0;
+  opacity: 0.4;
 }
 
 /* ============================================
@@ -461,55 +454,98 @@ body {
 .pdf-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
+  table-layout: fixed;
+  font-size: 11px;
 }
 
 .pdf-table th,
 .pdf-table td {
   border: 1px solid #d1d5db;
   padding: 6px 8px;
-  text-align: center;
 }
 
-.pdf-table th {
-  background: #f3f4f6;
+.pdf-col-shift {
+  width: 95px;
+  text-align: center;
   font-weight: 700;
   font-size: 11px;
+  background: #f3f4f6;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
 }
 
-.pdf-table td:first-child {
-  text-align: left;
+.pdf-header-name {
+  font-weight: 700;
+  font-size: 11px;
+  color: #111827;
+}
+
+.pdf-header-date {
+  font-size: 10px;
+  color: #2563eb;
   font-weight: 600;
-  padding-left: 12px;
-  min-width: 120px;
+  margin-top: 1px;
+}
+
+.pdf-row-label {
+  font-weight: 700;
+  text-align: center;
+  vertical-align: middle;
+  font-size: 12px;
+}
+
+.pdf-row-label--morning {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.pdf-row-label--afternoon {
+  background: #ffedd5;
+  color: #c2410c;
+}
+
+.pdf-row-label--free {
+  background: #f3f4f6;
+  color: #4b5563;
+}
+
+.pdf-shift-cell {
+  vertical-align: top;
+  padding: 6px;
+  text-align: left;
 }
 
 .pdf-cell-morning {
-  background: #dbeafe;
-  color: #1e40af;
-  font-weight: 700;
+  background: #f8fafc;
 }
 
 .pdf-cell-afternoon {
-  background: #ffedd5;
-  color: #c2410c;
-  font-weight: 700;
+  background: #fffaf5;
 }
 
 .pdf-cell-free {
-  background: #f3f4f6;
-  color: #6b7280;
-  font-weight: 700;
+  background: #fbfbfb;
 }
 
-.pdf-legend {
-  margin-top: 12px;
+.pdf-emp-name {
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 3px 6px;
+  margin-bottom: 3px;
+  border-radius: 3px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  color: #1f2937;
+}
+
+.pdf-emp-name:last-child {
+  margin-bottom: 0;
+}
+
+.pdf-empty {
+  display: block;
+  text-align: center;
+  color: #9ca3af;
   font-size: 11px;
-  color: #6b7280;
-  display: flex;
-  gap: 1.5rem;
 }
 
 /* ============================================
@@ -544,19 +580,11 @@ body {
   .config-row .form-group {
     max-width: 100%;
   }
-
-  .login-card {
-    padding: 1.5rem;
-  }
 }
 
 @media (max-width: 480px) {
   .employee-grid {
     grid-template-columns: 1fr;
-  }
-
-  .app-title {
-    font-size: 1rem;
   }
 }
 
@@ -564,10 +592,8 @@ body {
    PRINT STYLES
    ============================================ */
 @media print {
-  .app-header,
   #config-panel,
-  .schedule-actions,
-  #login-panel {
+  .schedule-actions {
     display: none !important;
   }
 
@@ -579,10 +605,7 @@ body {
     font-size: 11px;
   }
 
-  .schedule-select {
-    border: none;
-    background: transparent;
-    font-weight: 700;
-    pointer-events: none;
+  .employee-shift-select {
+    display: none;
   }
 }
