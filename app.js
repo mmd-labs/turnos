@@ -761,16 +761,24 @@ const Renderer = {
     });
   },
 
+  getMonday(dateOrStr) {
+    if (!dateOrStr) return null;
+    const d = (typeof dateOrStr === 'string') ? new Date(dateOrStr + 'T00:00:00') : new Date(dateOrStr);
+    const day = d.getDay();
+    // 0 es Domingo (-6 días hasta el lunes anterior), 1 es Lunes (0), 2 es Martes (-1), etc.
+    const diff = day === 0 ? -6 : 1 - day;
+    d.setDate(d.getDate() + diff);
+    return d;
+  },
+
+  normalizeToMonday(dateStr) {
+    if (!dateStr) return '';
+    const monday = this.getMonday(dateStr);
+    return this._formatDate(monday);
+  },
+
   _getDayDates(weekStartStr) {
-    let base;
-    if (weekStartStr) {
-      base = new Date(weekStartStr + 'T00:00:00');
-    } else {
-      base = new Date();
-      const day = base.getDay();
-      const diff = day === 0 ? 1 : (8 - day) % 7 || 7;
-      base.setDate(base.getDate() + diff);
-    }
+    const base = weekStartStr ? this.getMonday(weekStartStr) : this.getMonday(new Date());
     const dates = [];
     for (let d = 0; d < 7; d++) {
       const cur = new Date(base);
@@ -801,8 +809,9 @@ const Renderer = {
   },
 
   _formatDateLong(dateStr) {
-    const date = new Date(dateStr + 'T00:00:00');
-    return date.toLocaleDateString('es-ES', {
+    const monday = this.getMonday(dateStr);
+    if (!monday) return '';
+    return monday.toLocaleDateString('es-ES', {
       day: 'numeric', month: 'long', year: 'numeric',
     });
   },
@@ -1308,7 +1317,7 @@ const App = {
 
   navigateWeek(deltaDays) {
     const currentVal = Renderer.weekStartInput.value;
-    let base = currentVal ? new Date(currentVal + 'T00:00:00') : new Date();
+    let base = Renderer.getMonday(currentVal || new Date());
     base.setDate(base.getDate() + deltaDays);
     const newWeekStr = Renderer._formatDate(base);
 
@@ -1349,6 +1358,13 @@ const App = {
       input.addEventListener('change', () => this._saveState());
     });
     Renderer.weekStartInput.addEventListener('change', () => {
+      const current = Renderer.weekStartInput.value;
+      const normalized = Renderer.normalizeToMonday(current);
+      if (normalized && normalized !== current) {
+        Renderer.weekStartInput.value = normalized;
+        Toast.show(`Ajustado al lunes de esa semana (${Renderer._getDayDates(normalized)[0].date}).`, 'info', 2500);
+      }
+      this.state.weekStart = Renderer.weekStartInput.value;
       this._saveState();
       this._updateWeekBadge(Renderer.weekStartInput.value);
     });
@@ -1438,6 +1454,12 @@ const App = {
   },
 
   _generateSchedule() {
+    const rawWeekStart = Renderer.weekStartInput.value;
+    const normalized = Renderer.normalizeToMonday(rawWeekStart);
+    if (normalized && normalized !== rawWeekStart) {
+      Renderer.weekStartInput.value = normalized;
+    }
+    this.state.weekStart = Renderer.weekStartInput.value;
     this._saveState();
 
     const employees = Renderer.getEmployeeNames();
