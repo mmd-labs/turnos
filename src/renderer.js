@@ -1,3 +1,5 @@
+import { Auditor } from "./auditor.js";
+
 import {
   STORAGE_KEYS,
   DAYS_FULL,
