@@ -296,11 +296,25 @@ export const App = {
 
     // Export PDF
     document.getElementById('btn-export').addEventListener('click', () => {
-      const matrix = Renderer.getScheduleFromDOM();
       const names = Renderer.getEmployeeNames();
-      const weekStart = Renderer.weekStartInput.value;
-      Renderer.renderPDF(matrix, names, weekStart);
-      Exporter.exportToPDF(weekStart);
+      const currentWeekStart = Renderer.weekStartInput.value;
+      const weeksCountSelect = document.getElementById('weeks-count');
+      const weeksCount = parseInt(weeksCountSelect ? weeksCountSelect.value : '1') || 1;
+      
+      let generatedWeeks = Storage.loadGeneratedWeeks() || [];
+      
+      if (weeksCount > 1 && generatedWeeks.length > 1) {
+        const weeksData = generatedWeeks.map(ws => {
+           const matrix = (ws === currentWeekStart) ? Renderer.getScheduleFromDOM() : (Storage.loadSchedule(ws) || []);
+           return { matrix, employees: names, weekStart: ws };
+        });
+        Renderer.renderMultiWeekPDF(weeksData);
+      } else {
+        const matrix = Renderer.getScheduleFromDOM();
+        Renderer.renderMultiWeekPDF([{ matrix, employees: names, weekStart: currentWeekStart }]);
+      }
+
+      Exporter.exportToPDF(currentWeekStart);
     });
 
     // Export CSV / Excel

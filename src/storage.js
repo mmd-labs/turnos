@@ -62,10 +62,10 @@ export const Storage = {
   saveBaseWeek(weekStr) { this._save(STORAGE_KEYS.BASE_WEEK, weekStr); },
   loadBaseWeek() { return this._load(STORAGE_KEYS.BASE_WEEK); },
   
-  saveGeneratedWeeks(weeksSet) { this._save(STORAGE_KEYS.GENERATED_WEEKS, Array.from(weeksSet)); },
+  saveGeneratedWeeks(weeksArray) { this._save(STORAGE_KEYS.GENERATED_WEEKS, Array.from(weeksArray)); },
   loadGeneratedWeeks() {
     const arr = this._load(STORAGE_KEYS.GENERATED_WEEKS);
-    return arr ? new Set(arr) : new Set();
+    return arr ? Array.from(arr) : [];
   },
   
   saveWeeksCount(count) { this._save(STORAGE_KEYS.WEEKS_COUNT, count); },

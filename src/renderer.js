@@ -22,8 +22,7 @@ export const Renderer = {
     this.employeeCountInput = document.getElementById('employee-count');
     this.employeeNamesContainer = document.getElementById('employee-names');
     this.scheduleBody = document.getElementById('schedule-body');
-    this.pdfBody = document.getElementById('pdf-body');
-    this.pdfWeekRange = document.getElementById('pdf-week-range');
+    this.pdfContainer = document.getElementById('pdf-container');
   },
 
   showConfig() {
@@ -528,28 +527,40 @@ export const Renderer = {
     });
     return matrix;
   },
-
-  renderPDF(matrix, employees, weekStart) {
+  renderSingleWeekHTML(matrix, employees, weekStart) {
     const start = weekStart || this.weekStartInput.value;
-    this.pdfWeekRange.textContent = `Semana del ${this._formatDateLong(start)}`;
     const dayInfo = this._getDayDates(start);
 
-    // 1. Render PDF Header Row
-    const pdfHeadRow = document.getElementById('pdf-head-row');
-    if (pdfHeadRow) {
-      pdfHeadRow.innerHTML = '<th class="pdf-col-shift">Turno</th>';
-      dayInfo.forEach(d => {
-        const th = document.createElement('th');
-        th.innerHTML = `
-          <div class="pdf-header-name">${d.name}</div>
-          <div class="pdf-header-date">${d.date}</div>
-        `;
-        pdfHeadRow.appendChild(th);
-      });
-    }
+    const wrapper = document.createElement('div');
+    wrapper.className = 'pdf-week-wrapper';
+    wrapper.style.marginBottom = '30px';
 
-    // 2. Render PDF Table Body: 3 rows (Mañana, Tarde, Libre)
-    this.pdfBody.innerHTML = '';
+    const header = document.createElement('div');
+    header.className = 'pdf-header';
+    header.innerHTML = `
+      <h1>Cuadrante de Turnos Semanal</h1>
+      <p>Semana del ${this._formatDateLong(start)}</p>
+    `;
+    wrapper.appendChild(header);
+
+    const table = document.createElement('table');
+    table.className = 'pdf-table';
+    
+    const thead = document.createElement('thead');
+    const headRow = document.createElement('tr');
+    headRow.innerHTML = '<th class="pdf-col-shift">Turno</th>';
+    dayInfo.forEach(d => {
+      const th = document.createElement('th');
+      th.innerHTML = `
+        <div class="pdf-header-name">${d.name}</div>
+        <div class="pdf-header-date">${d.date}</div>
+      `;
+      headRow.appendChild(th);
+    });
+    thead.appendChild(headRow);
+    table.appendChild(thead);
+
+    const tbody = document.createElement('tbody');
     const shiftDefs = [
       { key: 'M', label: 'Mañana', cssClass: 'morning' },
       { key: 'T', label: 'Tarde', cssClass: 'afternoon' },
@@ -558,7 +569,6 @@ export const Renderer = {
 
     shiftDefs.forEach(shift => {
       const tr = document.createElement('tr');
-
       const tdLabel = document.createElement('td');
       tdLabel.className = `pdf-row-label pdf-row-label--${shift.cssClass}`;
       tdLabel.textContent = shift.label;
@@ -588,12 +598,33 @@ export const Renderer = {
             td.appendChild(div);
           });
         }
-
         tr.appendChild(td);
       }
-
-      this.pdfBody.appendChild(tr);
+      tbody.appendChild(tr);
     });
+    table.appendChild(tbody);
+    wrapper.appendChild(table);
+
+    return wrapper;
+  },
+
+  renderMultiWeekPDF(weeksData) {
+    if (!this.pdfContainer) return;
+    this.pdfContainer.innerHTML = '';
+    
+    weeksData.forEach((w, index) => {
+      const el = this.renderSingleWeekHTML(w.matrix, w.employees, w.weekStart);
+      if (index > 0) {
+        // Force a page break for multi-week PDFs so they don't overlap awkwardly
+        el.style.pageBreakBefore = 'always';
+      }
+      this.pdfContainer.appendChild(el);
+    });
+  },
+
+  renderPDF(matrix, employees, weekStart) {
+    // Keep backward compatibility for single-week live updates
+    this.renderMultiWeekPDF([{ matrix, employees, weekStart }]);
   },
 
   getMonday(dateOrStr) {
