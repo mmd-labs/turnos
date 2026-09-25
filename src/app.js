@@ -71,13 +71,13 @@ export const App = {
 
     supabase.auth.onAuthStateChange(async (event, session) => {
       if (session) {
-        authContainer.style.display = 'none';
+        if (authContainer.open) authContainer.close();
         appWrapper.style.display = 'block';
         await SyncManager.pull(); // Traer datos de Supabase antes de pintar
         this._enterApp();
       } else {
         appWrapper.style.display = 'none';
-        authContainer.style.display = 'flex';
+        if (!authContainer.open) authContainer.showModal();
       }
     });
   },
