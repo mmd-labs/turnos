@@ -1,4 +1,4 @@
-import { STORAGE_KEYS, DAYS_FULL, ROTATING_OFF_PATTERN, DEFAULT_EMPLOYEE_NAMES } from './constants.js';
+import { STORAGE_KEYS, DAYS_FULL, DAYS, ROTATING_OFF_PATTERN, DEFAULT_EMPLOYEE_NAMES } from './constants.js';
 import { Storage } from './storage.js';
 import { Toast } from './toast.js';
 export const Renderer = {
