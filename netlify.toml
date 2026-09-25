@@ -1,4 +1,5 @@
 [build]
+  command = "npm test"
   publish = "."
 
 # Cabeceras de seguridad y políticas de caché

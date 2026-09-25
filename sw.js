@@ -1,12 +1,23 @@
-const CACHE_NAME = 'turnos-app-v1';
+const CACHE_NAME = 'turnos-app-v3';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
   './style.css',
-  './app.js',
+  './src/constants.js',
+  './src/scheduler.js',
+  './src/toast.js',
+  './src/theme.js',
+  './src/storage.js',
+  './src/renderer.js',
+  './src/exporter.js',
+  './src/individual.js',
+  './src/help.js',
+  './src/app.js',
   './icon.svg',
+  './icon-192.png',
+  './icon-512.png',
   './manifest.json',
-  'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js'
+  './vendor/html2pdf.bundle.min.js'
 ];
 
 // Install event: cache core assets
