@@ -6,6 +6,8 @@ import { IndividualView } from './individual.js';
 import { HelpModal } from './help.js';
 import { Scheduler } from './scheduler.js';
 import { Toast } from './toast.js';
+import { supabase } from './supabase.js';
+import { SyncManager } from './sync.js';
 
 export const App = {
   state: {
@@ -13,15 +15,70 @@ export const App = {
     weekStart: '',
   },
 
-  init() {
+  async init() {
+    this._setupAuth();
     Toast.init();
     Theme.init();
     IndividualView.init();
     HelpModal.init();
     Renderer.init();
     this._bindEvents();
-    this._enterApp();
     this._registerServiceWorker();
+  },
+
+  async _setupAuth() {
+    const authContainer = document.getElementById('auth-container');
+    const appWrapper = document.getElementById('app-wrapper');
+    const btnLogin = document.getElementById('btn-login');
+    const usernameInput = document.getElementById('auth-username');
+    const passwordInput = document.getElementById('auth-password');
+    const errorEl = document.getElementById('auth-error');
+
+    const FAKE_DOMAIN = '@turnos-internal.com';
+
+    const handleLogin = async () => {
+      const username = usernameInput.value.trim();
+      const password = passwordInput.value;
+      if (!username || !password) return;
+
+      btnLogin.textContent = 'Ingresando...';
+      btnLogin.disabled = true;
+      errorEl.style.display = 'none';
+
+      const email = `${username}${FAKE_DOMAIN}`;
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      
+      if (error) {
+        errorEl.textContent = 'Credenciales inválidas';
+        errorEl.style.display = 'block';
+        btnLogin.textContent = 'Ingresar';
+        btnLogin.disabled = false;
+      }
+    };
+
+    btnLogin.addEventListener('click', handleLogin);
+    passwordInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') handleLogin();
+    });
+
+    const btnLogout = document.getElementById('btn-logout');
+    if (btnLogout) {
+      btnLogout.addEventListener('click', async () => {
+        await supabase.auth.signOut();
+      });
+    }
+
+    supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session) {
+        authContainer.style.display = 'none';
+        appWrapper.style.display = 'block';
+        await SyncManager.pull(); // Traer datos de Supabase antes de pintar
+        this._enterApp();
+      } else {
+        appWrapper.style.display = 'none';
+        authContainer.style.display = 'flex';
+      }
+    });
   },
 
   _registerServiceWorker() {

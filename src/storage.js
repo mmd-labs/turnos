@@ -1,7 +1,10 @@
 import { STORAGE_KEYS } from './constants.js';
+import { SyncManager } from './sync.js';
+
 export const Storage = {
   _save(key, data) {
     localStorage.setItem(key, JSON.stringify({ version: 1, data }));
+    SyncManager.onLocalChange();
   },
 
   _load(key) {
