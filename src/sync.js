@@ -14,7 +14,7 @@ export const SyncManager = {
         .from('user_config')
         .select('config_json')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
       
       if (!configError && configData?.config_json) {
         // Merge with localStorage

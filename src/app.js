@@ -8,6 +8,7 @@ import { Scheduler } from './scheduler.js';
 import { Toast } from './toast.js';
 import { supabase } from './supabase.js';
 import { SyncManager } from './sync.js';
+import { DEFAULT_EMPLOYEES, DEFAULT_EMPLOYEE_NAMES, MIN_EMPLOYEES } from './constants.js';
 
 export const App = {
   state: {
