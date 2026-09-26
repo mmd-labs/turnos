@@ -1,4 +1,4 @@
-const CACHE_NAME = 'turnos-app-v11';
+const CACHE_NAME = 'turnos-app-v12';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -21,6 +21,10 @@ const ASSETS_TO_CACHE = [
   './src/features/sync/infrastructure/null-sync.adapter.js',
   './src/features/settings/application/ports.js',
   './src/features/settings/infrastructure/local-settings.repository.js',
+  './src/features/settings/presentation/employee-names-view.js',
+  './src/features/settings/presentation/demand-view.js',
+  './src/features/settings/presentation/week-nav-view.js',
+  './src/features/settings/presentation/settings.controller.js',
   './src/features/scheduling/domain/entities.js',
   './src/features/scheduling/domain/rules/demand.js',
   './src/features/scheduling/domain/patterns.js',
@@ -28,9 +32,12 @@ const ASSETS_TO_CACHE = [
   './src/features/scheduling/application/ports.js',
   './src/features/scheduling/application/generate-schedules.usecase.js',
   './src/features/scheduling/infrastructure/local-schedule.repository.js',
+  './src/features/scheduling/presentation/schedule-view.js',
+  './src/features/scheduling/presentation/schedule.controller.js',
   './src/features/audit/domain/audit-report.entity.js',
   './src/features/audit/domain/audit-schedule.js',
   './src/features/audit/presentation/audit-view.js',
+  './src/main.js',
   './src/constants.js',
   './src/scheduler.js',
   './src/toast.js',

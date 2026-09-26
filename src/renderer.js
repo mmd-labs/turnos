@@ -1,17 +1,21 @@
-import { Auditor } from "./auditor.js";
+/**
+ * Presentation Facade / Compatibility Shim for Renderer.
+ * Delegates to specialized view components:
+ * - ScheduleView
+ * - EmployeeNamesView
+ * - DemandView
+ * - WeekNavView
+ */
 
 import {
-  STORAGE_KEYS,
-  DAYS_FULL,
-  DAYS,
-  ROTATING_OFF_PATTERN,
-  DEFAULT_EMPLOYEE_NAMES,
   DEFAULT_EMPLOYEES,
   DEFAULT_EMPLOYEE_PATTERNS,
   DEFAULT_EMPLOYEE_SHIFT_MODES,
-} from './constants.js';
+  ROTATING_OFF_PATTERN,
+} from './core/constants/domain.js';
 import { Storage } from './storage.js';
 import { Toast } from './toast.js';
+import { Auditor } from './auditor.js';
 import {
   getMonday,
   normalizeToMonday,
@@ -31,33 +35,66 @@ import {
   calculateBasePattern,
 } from './features/scheduling/domain/patterns.js';
 import { navigationService } from './core/infrastructure/navigation.service.js';
-
-
+import { scheduleView } from './features/scheduling/presentation/schedule-view.js';
+import { employeeNamesView } from './features/settings/presentation/employee-names-view.js';
+import { demandView } from './features/settings/presentation/demand-view.js';
+import { weekNavView } from './features/settings/presentation/week-nav-view.js';
 
 export const Renderer = {
+  get configPanel() { return scheduleView.configPanel; },
+  set configPanel(val) { scheduleView.configPanel = val; },
+
+  get schedulePanel() { return scheduleView.schedulePanel; },
+  set schedulePanel(val) { scheduleView.schedulePanel = val; },
+
+  get weekStartInput() { return weekNavView.weekStartInput; },
+  set weekStartInput(val) { weekNavView.weekStartInput = val; },
+
+  get employeeCountInput() {
+    return /** @type {HTMLInputElement|null} */ (document.getElementById('employee-count'));
+  },
+
+  get employeeNamesContainer() { return employeeNamesView.container; },
+  set employeeNamesContainer(val) { employeeNamesView.container = val; },
+
+  get scheduleBody() { return scheduleView.scheduleBody; },
+  set scheduleBody(val) { scheduleView.scheduleBody = val; },
+
+  get pdfContainer() { return scheduleView.pdfContainer; },
+  set pdfContainer(val) { scheduleView.pdfContainer = val; },
+
+  get currentMatrix() { return scheduleView.currentMatrix; },
+  set currentMatrix(val) { scheduleView.currentMatrix = val; },
+
+  get currentEmployees() { return scheduleView.currentEmployees; },
+  set currentEmployees(val) { scheduleView.currentEmployees = val; },
+
+  get currentWeekStart() { return scheduleView.currentWeekStart; },
+  set currentWeekStart(val) { scheduleView.currentWeekStart = val; },
+
+  get activeDemandWeekIndex() { return demandView.activeDemandWeekIndex; },
+  set activeDemandWeekIndex(val) { demandView.activeDemandWeekIndex = val; },
+
+  get activeDemandWeekStr() { return demandView.activeDemandWeekStr; },
+  set activeDemandWeekStr(val) { demandView.activeDemandWeekStr = val; },
+
   init() {
-    this.configPanel = document.getElementById('config-panel');
-    this.schedulePanel = document.getElementById('schedule-panel');
-    this.weekStartInput = document.getElementById('week-start');
-    this.employeeCountInput = document.getElementById('employee-count');
-    this.employeeNamesContainer = document.getElementById('employee-names');
-    this.scheduleBody = document.getElementById('schedule-body');
-    this.pdfContainer = document.getElementById('pdf-container');
+    scheduleView.init();
+    employeeNamesView.init();
+    demandView.init();
+    weekNavView.init();
   },
 
   showConfig() {
-    this.configPanel.hidden = false;
-    this.schedulePanel.hidden = true;
+    scheduleView.showConfig();
   },
 
   showSchedule() {
-    this.configPanel.hidden = true;
-    this.schedulePanel.hidden = false;
+    scheduleView.showSchedule();
   },
 
   setDefaultWeekStart() {
-    const nextMonday = getNextMonday();
-    this.weekStartInput.value = formatDate(nextMonday);
+    weekNavView.setDefaultWeekStart();
   },
 
   _getWeeksDiff(dateStr1, dateStr2) {
@@ -71,7 +108,7 @@ export const Renderer = {
   },
 
   getEffectivePatternWeeks(weekStartStr) {
-    const count = parseInt(this.employeeCountInput ? this.employeeCountInput.value : DEFAULT_EMPLOYEES) || DEFAULT_EMPLOYEES;
+    const count = parseInt(this.employeeCountInput ? this.employeeCountInput.value : String(DEFAULT_EMPLOYEES)) || DEFAULT_EMPLOYEES;
     const baseWeek = Storage.loadBaseWeek() || (this.weekStartInput ? this.weekStartInput.value : '');
     const savedPatterns = Storage.loadPatterns();
     return getEffectivePatternWeeks({ count, baseWeek, targetWeek: weekStartStr, savedPatterns });
@@ -101,168 +138,68 @@ export const Renderer = {
   },
 
   getEffectiveShiftTargets(weekStartStr) {
-    const count = parseInt(this.employeeCountInput ? this.employeeCountInput.value : DEFAULT_EMPLOYEES) || DEFAULT_EMPLOYEES;
+    const count = parseInt(this.employeeCountInput ? this.employeeCountInput.value : String(DEFAULT_EMPLOYEES)) || DEFAULT_EMPLOYEES;
     const baseWeek = Storage.loadBaseWeek() || (this.weekStartInput ? this.weekStartInput.value : '');
     const savedShiftModes = Storage.loadConfig()?.shiftModes;
     return getEffectiveShiftTargets({ count, baseWeek, targetWeek: weekStartStr, savedShiftModes });
   },
 
   renderGeneratedWeeksNav(weeks, currentWeek) {
-    const nav = document.getElementById('generated-weeks-nav');
-    if (!nav) return;
-    if (!weeks || weeks.length <= 1) {
-      nav.hidden = true;
-      nav.innerHTML = '';
-      return;
-    }
-    nav.hidden = false;
-    nav.innerHTML = weeks.map((w, idx) => {
-      const dates = this._getDayDates(w);
-      const startStr = `${dates[0].date.split('/')[0]}/${dates[0].date.split('/')[1]}`;
-      const endStr = `${dates[6].date.split('/')[0]}/${dates[6].date.split('/')[1]}`;
-      const isActive = (w === currentWeek);
-      return `<button type="button" class="week-pill ${isActive ? 'active' : ''}" data-week="${w}">
-        Semana ${idx + 1} (${startStr} - ${endStr})
-      </button>`;
-    }).join('');
-
-    nav.querySelectorAll('.week-pill').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const week = btn.dataset.week;
-        navigationService.navigateToWeek(week);
-      });
+    weekNavView.renderGeneratedWeeksNav(weeks, currentWeek, (targetWeek) => {
+      navigationService.navigateToWeek(targetWeek);
     });
   },
 
   updateShiftBadges() {
     const weekStart = this.weekStartInput ? this.weekStartInput.value : '';
-    if (!this.employeeNamesContainer) return;
-    const cards = this.employeeNamesContainer.querySelectorAll('.employee-card');
-    cards.forEach((card, i) => {
-      const badge = card.querySelector('.emp-shifts-badge');
-      if (badge) {
-        const effectiveShiftMode = this.getEffectiveShiftMode(i, weekStart);
-        const shiftLabel = (i === 0) 
-          ? 'Solo Mañana (5M / 0T)' 
-          : (effectiveShiftMode === '3M2T' ? '3 Mañanas + 2 Tardes' : '2 Mañanas + 3 Tardes');
-        const shiftTagClass = (i === 0) ? 'emp-shifts-badge--morning' : (effectiveShiftMode === '3M2T' ? 'emp-shifts-badge--3m2t' : 'emp-shifts-badge--2m3t');
-        badge.className = `emp-shifts-badge ${shiftTagClass}`;
-        badge.textContent = shiftLabel;
-      }
-    });
+    const baseWeek = Storage.loadBaseWeek() || weekStart;
+    const savedShiftModes = Storage.loadConfig()?.shiftModes;
+    employeeNamesView.updateShiftBadges({ weekStart, baseWeek, savedShiftModes });
   },
 
   updatePatternSelects() {
     const weekStart = this.weekStartInput ? this.weekStartInput.value : '';
-    if (!this.employeeNamesContainer) return;
-    const selects = this.employeeNamesContainer.querySelectorAll('.emp-pattern-select');
-    selects.forEach(sel => {
-      const idx = parseInt(sel.dataset.index);
-      const eff = this.getEffectivePatternWeek(idx, weekStart);
-      sel.value = eff;
-    });
+    const baseWeek = Storage.loadBaseWeek() || weekStart;
+    const savedPatterns = Storage.loadPatterns();
+    employeeNamesView.updatePatternSelects({ weekStart, baseWeek, savedPatterns });
     this.updateShiftBadges();
   },
 
   renderEmployeeNames(count, savedNames) {
-    this.employeeNamesContainer.innerHTML = '';
     const weekStart = this.weekStartInput ? this.weekStartInput.value : '';
-    for (let i = 0; i < count; i++) {
-      const defaultName = DEFAULT_EMPLOYEE_NAMES[i] || `Empleado ${i + 1}`;
-      let currentName = defaultName;
-      if (savedNames && savedNames[i] && savedNames[i] !== `Empleado ${i + 1}`) {
-        currentName = savedNames[i];
-      }
-      const effectiveWeek = this.getEffectivePatternWeek(i, weekStart);
-      const effectiveShiftMode = this.getEffectiveShiftMode(i, weekStart);
-      const shiftLabel = (i === 0) 
-        ? 'Solo Mañana (5M / 0T)' 
-        : (effectiveShiftMode === '3M2T' ? '3 Mañanas + 2 Tardes' : '2 Mañanas + 3 Tardes');
-      const shiftTagClass = (i === 0) ? 'emp-shifts-badge--morning' : (effectiveShiftMode === '3M2T' ? 'emp-shifts-badge--3m2t' : 'emp-shifts-badge--2m3t');
+    const baseWeek = Storage.loadBaseWeek() || weekStart;
+    const savedPatterns = Storage.loadPatterns();
+    const savedShiftModes = Storage.loadConfig()?.shiftModes;
 
-      const patternOptions = ROTATING_OFF_PATTERN.map(p => 
-        `<option value="${p.week}" ${p.week === effectiveWeek ? 'selected' : ''}>Semana ${p.week}: ${p.label}</option>`
-      ).join('');
-
-      const div = document.createElement('div');
-      div.className = 'form-group employee-card';
-      const keyNotice = (i === 0) ? '<span class="emp-key-tag">Clave · Solo Mañana</span>' : '';
-      div.innerHTML = `
-        <div class="emp-card-header">
-          <label for="emp-name-${i}">Empleado ${i + 1}</label>
-          ${keyNotice}
-        </div>
-        <input type="text" id="emp-name-${i}" class="emp-name-input" data-index="${i}"
-               value="${this._escapeHtml(currentName)}"
-               placeholder="${this._escapeHtml(defaultName)}">
-        <div class="emp-pattern-group">
-          <label for="emp-pattern-${i}" class="emp-pattern-label">Patrón rotativo:</label>
-          <select id="emp-pattern-${i}" class="emp-pattern-select" data-index="${i}">
-            ${patternOptions}
-          </select>
-        </div>
-        <div class="emp-shift-group">
-          <span class="emp-shift-label">Turnos semanales:</span>
-          <span class="emp-shifts-badge ${shiftTagClass}">${this._escapeHtml(shiftLabel)}</span>
-        </div>
-      `;
-      this.employeeNamesContainer.appendChild(div);
-    }
-
-    // Attach change listener to pattern selects
-    this.employeeNamesContainer.querySelectorAll('.emp-pattern-select').forEach(select => {
-      select.addEventListener('change', (e) => {
-        const idx = parseInt(e.target.dataset.index);
-        const val = parseInt(e.target.value);
-        const currentWeek = this.weekStartInput ? this.weekStartInput.value : '';
-        this.setEmployeePatternForWeek(idx, val, currentWeek);
-        const empName = this.getEmployeeNames()[idx] || `Empleado ${idx + 1}`;
-        Toast.show(`Patrón de ${empName}: Semana ${val} (${ROTATING_OFF_PATTERN[val-1].label})`, 'info', 2500);
-      });
+    employeeNamesView.render({
+      count,
+      savedNames,
+      weekStart,
+      baseWeek,
+      savedPatterns,
+      savedShiftModes,
+      onPatternChange: ({ empIndex, patternWeek, label }) => {
+        this.setEmployeePatternForWeek(empIndex, patternWeek, weekStart);
+        const empName = this.getEmployeeNames()[empIndex] || `Empleado ${empIndex + 1}`;
+        Toast.show(`Patrón de ${empName}: Semana ${patternWeek} (${label})`, 'info', 2500);
+      },
     });
   },
 
   getEmployeeNames() {
-    const inputs = this.employeeNamesContainer.querySelectorAll('.emp-name-input');
-    return Array.from(inputs).map(input => {
-      const idx = parseInt(input.dataset.index);
-      const defaultName = DEFAULT_EMPLOYEE_NAMES[idx] || `Empleado ${idx + 1}`;
-      return input.value.trim() || defaultName;
-    });
+    return employeeNamesView.getEmployeeNames();
   },
 
   loadDemandConfig(demand) {
-    if (!demand) return;
-    document.querySelectorAll('.demand-input').forEach(input => {
-      const shift = input.dataset.shift;
-      const day = parseInt(input.dataset.day);
-      if (demand[shift] && demand[shift][day] !== undefined) {
-        let val = demand[shift][day];
-        input.value = clampDemandValue(day, val);
-      }
-    });
+    demandView.loadDemandConfig(demand);
   },
 
   getDemandConfig() {
-    const demand = { morning: [], afternoon: [] };
-    document.querySelectorAll('.demand-input').forEach(input => {
-      const shift = input.dataset.shift;
-      const day = parseInt(input.dataset.day);
-      demand[shift][day] = parseInt(input.value) || 0;
-    });
-    return demand;
+    return demandView.getDemandConfig();
   },
 
-  activeDemandWeekIndex: 0,
-  activeDemandWeekStr: null,
-
   getActiveDemandWeekStr() {
-    const startWeek = this.weekStartInput ? this.weekStartInput.value : '';
-    if (!startWeek) return '';
-    const monday = this.getMonday(startWeek);
-    if (!monday) return startWeek;
-    monday.setDate(monday.getDate() + (this.activeDemandWeekIndex * 7));
-    return this._formatDate(monday);
+    return demandView.getActiveDemandWeekStr(this.weekStartInput ? this.weekStartInput.value : '');
   },
 
   getDemandForWeek(weekStr) {
@@ -278,327 +215,64 @@ export const Renderer = {
   },
 
   renderDemandWeeksNav() {
-    const nav = document.getElementById('demand-weeks-nav');
-    const actions = document.getElementById('demand-actions');
-    const indicator = document.getElementById('demand-active-indicator');
-    const weeksCountSelect = document.getElementById('weeks-count');
+    const weeksCountSelect = /** @type {HTMLSelectElement|null} */ (document.getElementById('weeks-count'));
     const weeksCount = parseInt(weeksCountSelect ? weeksCountSelect.value : '1') || 1;
     const startWeek = this.weekStartInput ? this.weekStartInput.value : '';
 
-    if (!nav || !startWeek) return;
-
-    if (weeksCount <= 1) {
-      nav.hidden = true;
-      nav.innerHTML = '';
-      if (actions) actions.hidden = true;
-      if (indicator) indicator.hidden = true;
-      this.activeDemandWeekIndex = 0;
-      this.activeDemandWeekStr = startWeek;
-      return;
-    }
-
-    nav.hidden = false;
-    if (actions) actions.hidden = false;
-    if (indicator) indicator.hidden = false;
-
-    if (this.activeDemandWeekIndex >= weeksCount || this.activeDemandWeekIndex < 0) {
-      this.activeDemandWeekIndex = 0;
-    }
-
-    const pillsHtml = [];
-    for (let w = 0; w < weeksCount; w++) {
-      const monday = this.getMonday(startWeek);
-      monday.setDate(monday.getDate() + (w * 7));
-      const weekStr = this._formatDate(monday);
-      const dates = this._getDayDates(weekStr);
-      const startStr = `${dates[0].date.split('/')[0]}/${dates[0].date.split('/')[1]}`;
-      const endStr = `${dates[6].date.split('/')[0]}/${dates[6].date.split('/')[1]}`;
-      const isActive = (w === this.activeDemandWeekIndex);
-      pillsHtml.push(`
-        <button type="button" class="week-pill ${isActive ? 'active' : ''}" data-index="${w}" data-week="${weekStr}">
-          Semana ${w + 1} (${startStr} - ${endStr})
-        </button>
-      `);
-    }
-    nav.innerHTML = pillsHtml.join('');
-
-    const activeMonday = this.getMonday(startWeek);
-    activeMonday.setDate(activeMonday.getDate() + (this.activeDemandWeekIndex * 7));
-    this.activeDemandWeekStr = this._formatDate(activeMonday);
-    const activeDates = this._getDayDates(this.activeDemandWeekStr);
-    if (indicator) {
-      indicator.textContent = `Demanda para: Semana ${this.activeDemandWeekIndex + 1} (${activeDates[0].date} - ${activeDates[6].date})`;
-    }
-
-    nav.querySelectorAll('.week-pill').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const targetIdx = parseInt(btn.dataset.index);
-        const targetWeek = btn.dataset.week;
-        if (targetIdx === this.activeDemandWeekIndex) return;
-
-        // 1. Guardar demanda de la semana actual antes de cambiar
+    demandView.renderDemandWeeksNav({
+      weeksCount,
+      startWeek,
+      onSelectWeek: ({ targetIndex, targetWeek }) => {
         if (this.activeDemandWeekStr) {
           Storage.saveDemandForWeek(this.activeDemandWeekStr, this.getDemandConfig());
         }
-
-        // 2. Cambiar a la nueva semana
-        this.activeDemandWeekIndex = targetIdx;
-        this.activeDemandWeekStr = targetWeek;
-
-        // 3. Cargar demanda de la semana seleccionada
+        demandView.updateActivePill(targetIndex, targetWeek);
         const targetDemand = Storage.loadDemandForWeek(targetWeek) || this.getDemandConfig();
         this.loadDemandConfig(targetDemand);
-
-        // 4. Actualizar botones e indicador
-        nav.querySelectorAll('.week-pill').forEach(p => p.classList.remove('active'));
-        btn.classList.add('active');
-        if (indicator) {
-          const tDates = this._getDayDates(targetWeek);
-          indicator.textContent = `Demanda para: Semana ${targetIdx + 1} (${tDates[0].date} - ${tDates[6].date})`;
-        }
-      });
+      },
     });
   },
 
   renderSchedule(matrix, employees, weekStart) {
-    this.currentMatrix = matrix;
-    this.currentEmployees = employees;
-    this.currentWeekStart = weekStart || this.weekStartInput.value;
-
-    const dayInfo = this._getDayDates(this.currentWeekStart);
-
-    // 1. Render Table Header: Turno + Day names & dates
-    const headRow = document.getElementById('schedule-head-row');
-    if (headRow) {
-      headRow.innerHTML = '<th class="col-shift">Turno</th>';
-      dayInfo.forEach(d => {
-        const th = document.createElement('th');
-        th.className = 'day-col-header';
-        th.innerHTML = `
-          <div class="day-header-name">${d.name}</div>
-          <div class="day-header-date">${d.date}</div>
-        `;
-        headRow.appendChild(th);
-      });
-    }
-
-    // Update schedule week badge
-    const badge = document.getElementById('schedule-week-badge');
-    if (badge) {
-      badge.textContent = `Semana del ${this._formatDateLong(this.currentWeekStart)}`;
-    }
-
-    // 2. Render Table Body: 3 rows (Mañana, Tarde, Libre)
-    this.scheduleBody.innerHTML = '';
-    const shiftDefs = [
-      { key: 'M', label: 'Mañana', cssClass: 'morning' },
-      { key: 'T', label: 'Tarde', cssClass: 'afternoon' },
-      { key: 'L', label: 'Libre', cssClass: 'free' },
-    ];
-
-    shiftDefs.forEach(shift => {
-      const tr = document.createElement('tr');
-
-      // Shift Label Column
-      const tdLabel = document.createElement('td');
-      tdLabel.className = `row-label row-label--${shift.cssClass}`;
-      tdLabel.textContent = shift.label;
-      tr.appendChild(tdLabel);
-
-      // 7 Day Columns
-      for (let d = 0; d < 7; d++) {
-        const td = document.createElement('td');
-        td.className = `shift-cell shift-cell--${shift.cssClass}`;
-
-        const listContainer = document.createElement('div');
-        listContainer.className = 'employee-pill-list';
-
-        const assignedEmps = [];
-        for (let emp = 0; emp < employees.length; emp++) {
-          if (matrix[emp] && matrix[emp][d] === shift.key) {
-            assignedEmps.push(emp);
-          }
-        }
-
-        if (assignedEmps.length === 0) {
-          const emptySpan = document.createElement('span');
-          emptySpan.className = 'empty-shift-notice';
-          emptySpan.textContent = '—';
-          listContainer.appendChild(emptySpan);
-        } else {
-          assignedEmps.forEach(empIdx => {
-            const pill = document.createElement('div');
-            pill.className = `employee-pill employee-pill--${shift.cssClass}`;
-
-            const nameSpan = document.createElement('span');
-            nameSpan.className = 'employee-pill-name';
-            nameSpan.textContent = employees[empIdx];
-            nameSpan.title = employees[empIdx];
-            pill.appendChild(nameSpan);
-
-            // Shift selector for manual changes
-            const select = document.createElement('select');
-            select.className = 'employee-shift-select';
-            select.dataset.emp = empIdx;
-            select.dataset.day = d;
-            select.title = 'Cambiar turno';
-
-            ['M', 'T', 'L'].forEach(val => {
-              const opt = document.createElement('option');
-              opt.value = val;
-              opt.textContent = val;
-              if (val === shift.key) opt.selected = true;
-              select.appendChild(opt);
-            });
-
-            select.addEventListener('change', (e) => {
-              const newShift = e.target.value;
-              this.currentMatrix[empIdx][d] = newShift;
-              Storage.saveSchedule(this.currentWeekStart, this.currentMatrix);
-              this.renderSchedule(this.currentMatrix, this.currentEmployees, this.currentWeekStart);
-              this.renderPDF(this.currentMatrix, this.currentEmployees, this.currentWeekStart);
-              Toast.show('Turno actualizado y balance recalculado.', 'info', 2000);
-            });
-
-            pill.appendChild(select);
-            listContainer.appendChild(pill);
-          });
-        }
-
-        td.appendChild(listContainer);
-        tr.appendChild(td);
-      }
-
-      this.scheduleBody.appendChild(tr);
+    const weekStartFinal = weekStart || (this.weekStartInput ? this.weekStartInput.value : '');
+    scheduleView.renderSchedule({
+      matrix,
+      employees,
+      weekStart: weekStartFinal,
+      onShiftChange: () => {
+        Storage.saveSchedule(weekStartFinal, matrix);
+        this.renderSchedule(matrix, employees, weekStartFinal);
+        this.renderPDF(matrix, employees, weekStartFinal);
+        Toast.show('Turno actualizado y balance recalculado.', 'info', 2000);
+      },
     });
 
-    // 3. Update Live Audit & Balance panel
-    const weekDemand = Storage.loadDemandForWeek(this.currentWeekStart) || this.getDemandForWeek(this.currentWeekStart);
-    Auditor.run(this.currentMatrix, this.currentEmployees, weekDemand, this.currentWeekStart);
+    // Update Live Audit
+    const weekDemand = Storage.loadDemandForWeek(weekStartFinal) || this.getDemandForWeek(weekStartFinal);
+    Auditor.run(matrix, employees, weekDemand, weekStartFinal);
 
-    // 4. Update multi-week nav pills
+    // Update multi-week nav pills
     const genWeeks = Storage.loadGeneratedWeeks();
     if (genWeeks && genWeeks.length > 1) {
-      this.renderGeneratedWeeksNav(genWeeks, this.currentWeekStart);
+      this.renderGeneratedWeeksNav(genWeeks, weekStartFinal);
     }
   },
 
   getScheduleFromDOM() {
-    if (this.currentMatrix) {
-      return this.currentMatrix;
-    }
-    const selects = this.scheduleBody.querySelectorAll('.employee-shift-select');
-    let maxEmp = 0;
-    selects.forEach(s => {
-      const emp = parseInt(s.dataset.emp);
-      if (emp > maxEmp) maxEmp = emp;
-    });
-    const matrix = Array.from({ length: maxEmp + 1 }, () => Array(7).fill('L'));
-    selects.forEach(s => {
-      const emp = parseInt(s.dataset.emp);
-      const day = parseInt(s.dataset.day);
-      matrix[emp][day] = s.value;
-    });
-    return matrix;
+    return scheduleView.getScheduleFromDOM();
   },
+
   renderSingleWeekHTML(matrix, employees, weekStart) {
-    const start = weekStart || this.weekStartInput.value;
-    const dayInfo = this._getDayDates(start);
-
-    const wrapper = document.createElement('div');
-    wrapper.className = 'pdf-week-wrapper';
-    wrapper.style.marginBottom = '30px';
-
-    const header = document.createElement('div');
-    header.className = 'pdf-header';
-    header.innerHTML = `
-      <h1>Cuadrante de Turnos Semanal</h1>
-      <p>Semana del ${this._formatDateLong(start)}</p>
-    `;
-    wrapper.appendChild(header);
-
-    const table = document.createElement('table');
-    table.className = 'pdf-table';
-    
-    const thead = document.createElement('thead');
-    const headRow = document.createElement('tr');
-    headRow.innerHTML = '<th class="pdf-col-shift">Turno</th>';
-    dayInfo.forEach(d => {
-      const th = document.createElement('th');
-      th.innerHTML = `
-        <div class="pdf-header-name">${d.name}</div>
-        <div class="pdf-header-date">${d.date}</div>
-      `;
-      headRow.appendChild(th);
-    });
-    thead.appendChild(headRow);
-    table.appendChild(thead);
-
-    const tbody = document.createElement('tbody');
-    const shiftDefs = [
-      { key: 'M', label: 'Mañana', cssClass: 'morning' },
-      { key: 'T', label: 'Tarde', cssClass: 'afternoon' },
-      { key: 'L', label: 'Libre', cssClass: 'free' },
-    ];
-
-    shiftDefs.forEach(shift => {
-      const tr = document.createElement('tr');
-      const tdLabel = document.createElement('td');
-      tdLabel.className = `pdf-row-label pdf-row-label--${shift.cssClass}`;
-      tdLabel.textContent = shift.label;
-      tr.appendChild(tdLabel);
-
-      for (let d = 0; d < 7; d++) {
-        const td = document.createElement('td');
-        td.className = `pdf-shift-cell pdf-cell-${shift.cssClass}`;
-
-        const assignedEmps = [];
-        for (let emp = 0; emp < employees.length; emp++) {
-          if (matrix[emp] && matrix[emp][d] === shift.key) {
-            assignedEmps.push(employees[emp]);
-          }
-        }
-
-        if (assignedEmps.length === 0) {
-          const empty = document.createElement('span');
-          empty.className = 'pdf-empty';
-          empty.textContent = '—';
-          td.appendChild(empty);
-        } else {
-          assignedEmps.forEach(name => {
-            const div = document.createElement('div');
-            div.className = 'pdf-emp-name';
-            div.textContent = name;
-            td.appendChild(div);
-          });
-        }
-        tr.appendChild(td);
-      }
-      tbody.appendChild(tr);
-    });
-    table.appendChild(tbody);
-    wrapper.appendChild(table);
-
-    return wrapper;
+    const start = weekStart || (this.weekStartInput ? this.weekStartInput.value : '');
+    return scheduleView.renderSingleWeekHTML(matrix, employees, start);
   },
 
   renderMultiWeekPDF(weeksData) {
-    if (!this.pdfContainer) return;
-    this.pdfContainer.innerHTML = '';
-    
-    weeksData.forEach((w, index) => {
-      const el = this.renderSingleWeekHTML(w.matrix, w.employees, w.weekStart);
-      if (index > 0) {
-        // Force a page break for multi-week PDFs so they don't overlap awkwardly
-        el.style.pageBreakBefore = 'always';
-      }
-      this.pdfContainer.appendChild(el);
-    });
+    scheduleView.renderMultiWeekPDF(weeksData);
   },
 
   renderPDF(matrix, employees, weekStart) {
-    // Keep backward compatibility for single-week live updates
-    this.renderMultiWeekPDF([{ matrix, employees, weekStart }]);
+    scheduleView.renderPDF(matrix, employees, weekStart);
   },
 
   getMonday(dateOrStr) {
@@ -625,4 +299,3 @@ export const Renderer = {
     return formatDateLong(dateStr);
   },
 };
-
