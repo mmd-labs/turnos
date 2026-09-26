@@ -12,6 +12,17 @@ import {
 } from './constants.js';
 import { Storage } from './storage.js';
 import { Toast } from './toast.js';
+import {
+  getMonday,
+  normalizeToMonday,
+  formatDate,
+  formatDateLong,
+  getWeeksDiff,
+  getDayDates,
+  getNextMonday,
+} from './core/date.js';
+import { escapeHtml } from './core/html.js';
+
 export const Renderer = {
   init() {
     this.configPanel = document.getElementById('config-panel');
@@ -34,24 +45,12 @@ export const Renderer = {
   },
 
   setDefaultWeekStart() {
-    const today = new Date();
-    const dayOfWeek = today.getDay();
-    // Find next Monday
-    const daysUntilMonday = dayOfWeek === 0 ? 1 : (8 - dayOfWeek) % 7 || 7;
-    const nextMonday = new Date(today);
-    nextMonday.setDate(today.getDate() + daysUntilMonday);
-    this.weekStartInput.value = this._formatDate(nextMonday);
+    const nextMonday = getNextMonday();
+    this.weekStartInput.value = formatDate(nextMonday);
   },
 
   _getWeeksDiff(dateStr1, dateStr2) {
-    if (!dateStr1 || !dateStr2) return 0;
-    const m1 = this.getMonday(dateStr1);
-    const m2 = this.getMonday(dateStr2);
-    if (!m1 || !m2) return 0;
-    const utc1 = Date.UTC(m1.getFullYear(), m1.getMonth(), m1.getDate());
-    const utc2 = Date.UTC(m2.getFullYear(), m2.getMonth(), m2.getDate());
-    const msPerWeek = 7 * 24 * 60 * 60 * 1000;
-    return Math.round((utc2 - utc1) / msPerWeek);
+    return getWeeksDiff(dateStr1, dateStr2);
   },
 
   getEffectivePatternWeek(empIndex, weekStartStr) {
@@ -620,68 +619,27 @@ export const Renderer = {
   },
 
   getMonday(dateOrStr) {
-    if (!dateOrStr) return null;
-    let d;
-    if (typeof dateOrStr === 'string') {
-      const parts = dateOrStr.split('-');
-      if (parts.length === 3) {
-        d = new Date(parts[0], parts[1] - 1, parts[2]);
-      } else {
-        d = new Date(dateOrStr);
-      }
-    } else {
-      d = new Date(dateOrStr);
-    }
-    const day = d.getDay();
-    // 0 es Domingo (-6 días hasta el lunes anterior), 1 es Lunes (0), 2 es Martes (-1), etc.
-    const diff = day === 0 ? -6 : 1 - day;
-    d.setDate(d.getDate() + diff);
-    return d;
+    return getMonday(dateOrStr);
   },
 
   normalizeToMonday(dateStr) {
-    if (!dateStr) return '';
-    const monday = this.getMonday(dateStr);
-    return this._formatDate(monday);
+    return normalizeToMonday(dateStr);
   },
 
   _getDayDates(weekStartStr) {
-    const base = weekStartStr ? this.getMonday(weekStartStr) : this.getMonday(new Date());
-    const dates = [];
-    for (let d = 0; d < 7; d++) {
-      const cur = new Date(base);
-      cur.setDate(base.getDate() + d);
-      const dayNum = String(cur.getDate()).padStart(2, '0');
-      const monthNum = String(cur.getMonth() + 1).padStart(2, '0');
-      dates.push({
-        name: DAYS_FULL[d],
-        short: DAYS[d],
-        date: `${dayNum}/${monthNum}`,
-        fullDate: `${dayNum}/${monthNum}/${cur.getFullYear()}`,
-      });
-    }
-    return dates;
+    return getDayDates(weekStartStr);
   },
 
   _escapeHtml(str) {
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
+    return escapeHtml(str);
   },
 
   _formatDate(date) {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
+    return formatDate(date);
   },
 
   _formatDateLong(dateStr) {
-    const monday = this.getMonday(dateStr);
-    if (!monday) return '';
-    return monday.toLocaleDateString('es-ES', {
-      day: 'numeric', month: 'long', year: 'numeric',
-    });
+    return formatDateLong(dateStr);
   },
 };
 

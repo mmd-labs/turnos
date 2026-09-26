@@ -1,8 +1,12 @@
-const CACHE_NAME = 'turnos-app-v5';
+const CACHE_NAME = 'turnos-app-v6';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
   './style.css',
+  './src/core/constants/domain.js',
+  './src/core/constants/storage-keys.js',
+  './src/core/date.js',
+  './src/core/html.js',
   './src/constants.js',
   './src/scheduler.js',
   './src/toast.js',
