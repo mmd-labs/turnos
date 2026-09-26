@@ -81,10 +81,74 @@ export const Scheduler = {
       ? options.patternWeeks
       : Array.from({ length: n }, (_, i) => DEFAULT_EMPLOYEE_PATTERNS[i] || ((i % 7) + 1));
 
-    // ---- PHASE 1 & 2: Assign CONSECUTIVE days off (L) following the 7-week rotating pattern ----
+    // ---- FEASIBILITY CHECK VIA CONSECUTIVE PAIR DECOMPOSITION ----
+    // off[d] = how many employees must take off on day d
+    const off = [];
+    for (let d = 0; d < 7; d++) {
+      off[d] = n - (demandM[d] + demandT[d]);
+    }
+
+    // Solve circular system: c[k-1] + c[k] = off[k] (indices mod 7)
+    // where c[k] is the count of employees assigned ROTATING_OFF_PATTERN[k] (starting on day k)
+    const c = Array(7).fill(0);
+    c[0] = (off[0] + off[1] - off[2] + off[3] - off[4] + off[5] - off[6]) / 2;
+    for (let k = 1; k < 7; k++) {
+      c[k] = off[k] - c[k - 1];
+    }
+
+    const invalidDayIndex = c.findIndex(val => !Number.isInteger(val) || val < 0);
+    if (invalidDayIndex !== -1) {
+      return {
+        success: false,
+        error: `La distribución de la demanda no puede cubrirse con pares de 2 días libres consecutivos (par con inicio en ${DAYS_FULL[invalidDayIndex]} inválido). Ajusta los totales diarios.`,
+      };
+    }
+
+    // ---- PHASE 1 & 2: Assign CONSECUTIVE days off (L) by preference ----
+    // Preferences: pref[e] = (patternWeeks[e] - 1) % 7
+    const assignedPair = Array(n).fill(-1);
+    const quotas = [...c];
+
+    // Pass 1: Assign preferred pair if quota available
     for (let emp = 0; emp < n; emp++) {
       const pWeek = patternWeeks[emp] || ((emp % 7) + 1);
-      const patternItem = ROTATING_OFF_PATTERN[(pWeek - 1) % 7] || ROTATING_OFF_PATTERN[0];
+      const pref = ((pWeek - 1) % 7 + 7) % 7;
+      if (quotas[pref] > 0) {
+        assignedPair[emp] = pref;
+        quotas[pref] -= 1;
+      }
+    }
+
+    // Pass 2: Assign remaining employees to available quotas minimizing circular distance to preference
+    for (let emp = 0; emp < n; emp++) {
+      if (assignedPair[emp] !== -1) continue;
+      const pWeek = patternWeeks[emp] || ((emp % 7) + 1);
+      const pref = ((pWeek - 1) % 7 + 7) % 7;
+
+      let bestPair = -1;
+      let minDistance = Infinity;
+
+      for (let k = 0; k < 7; k++) {
+        if (quotas[k] > 0) {
+          const rawDist = Math.abs(k - pref);
+          const circDist = Math.min(rawDist, 7 - rawDist);
+          if (circDist < minDistance) {
+            minDistance = circDist;
+            bestPair = k;
+          }
+        }
+      }
+
+      if (bestPair !== -1) {
+        assignedPair[emp] = bestPair;
+        quotas[bestPair] -= 1;
+      }
+    }
+
+    // Apply off days to matrix
+    for (let emp = 0; emp < n; emp++) {
+      const k = assignedPair[emp];
+      const patternItem = ROTATING_OFF_PATTERN[k] || ROTATING_OFF_PATTERN[0];
       const [d1, d2] = patternItem.days;
       matrix[emp][d1] = 'L';
       matrix[emp][d2] = 'L';
@@ -92,17 +156,18 @@ export const Scheduler = {
       offCount[d2] += 1;
     }
 
-    // Exact Daily Capacity & Total Capacity check incorporating offCount
+    // Internal assertion: offCount must exactly match required off days
     for (let d = 0; d < 7; d++) {
-      const workingCount = n - offCount[d];
-      const required = demandM[d] + demandT[d];
-      if (required !== workingCount) {
+      const expectedOff = n - (demandM[d] + demandT[d]);
+      if (offCount[d] !== expectedOff) {
         return {
           success: false,
-          error: `Inviabilidad matemática el ${DAYS_FULL[d]}: hay ${workingCount} empleados disponibles (libran ${offCount[d]}), pero la demanda suma ${required}. Deben coincidir exactamente.`,
+          error: `Error interno de asignación de libres en ${DAYS_FULL[d]}: esperado ${expectedOff}, obtenido ${offCount[d]}.`,
         };
       }
     }
+
+    // Emp 1 (index 0 - Clave): works strictly Morning on their 5 working days
     for (let d = 0; d < 7; d++) {
       if (matrix[0][d] === null) {
         matrix[0][d] = 'M';
