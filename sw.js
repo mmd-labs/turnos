@@ -1,4 +1,4 @@
-const CACHE_NAME = 'turnos-app-v12';
+const CACHE_NAME = 'turnos-app-v13';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -37,6 +37,13 @@ const ASSETS_TO_CACHE = [
   './src/features/audit/domain/audit-report.entity.js',
   './src/features/audit/domain/audit-schedule.js',
   './src/features/audit/presentation/audit-view.js',
+  './src/features/export/domain/csv-builder.js',
+  './src/features/export/domain/share-text.js',
+  './src/features/export/infrastructure/dom-download.adapter.js',
+  './src/features/export/infrastructure/navigator-share.adapter.js',
+  './src/features/export/infrastructure/html2pdf.adapter.js',
+  './src/features/individual/presentation/individual-view.js',
+  './src/features/individual/presentation/individual.controller.js',
   './src/main.js',
   './src/constants.js',
   './src/scheduler.js',

@@ -4,6 +4,8 @@ Aplicación web progresiva (**PWA**) para la **planificación, generación autom
 
 Funciona de forma **híbrida (Offline-First)**: opera al 100% en el navegador con `localStorage` y soporte sin conexión mediante Service Worker, y ofrece **sincronización multi-dispositivo y autenticación en la nube** a través de **Supabase**.
 
+Desarrollada bajo **Clean Architecture (Feature-First) + Principios SOLID**, 100% **bundler-less** (módulos nativos ES6 del navegador con contratos JSDoc y verificación estática con TypeScript) y con una completa suite de pruebas automatizadas como gate de despliegue.
+
 ---
 
 ## 🚀 Características Principales
@@ -21,15 +23,15 @@ Funciona de forma **híbrida (Offline-First)**: opera al 100% en el navegador co
     - **Semana 7**: Domingo y Lunes (`[6, 0]`)
   - Al cambiar de semana en el calendario, el sistema avanza automáticamente el ciclo para cada trabajador de manera equitativa.
   - La tarjeta de cada empleado incluye un selector para personalizar su semana de inicio en el ciclo.
-- **Generador Multi-Semanal y Navegación entre Semanas**:
-  - Selector de horizonte de planificación: genera de 1 a 12 semanas (1, 2, 3, 4, 7, 8 o 12 semanas) en un solo clic.
-  - Cada semana se calcula y almacena individualmente con sus fechas de calendario.
+- **Generador Multi-Semanal Atómico (Two-Phase Commit)**:
+  - Selector de horizonte de planificación: genera de 1 a 12 semanas en un solo clic.
+  - Ejecución en dos fases: *Dry-run* (cálculo y validación en memoria de todas las semanas) y *Commit* (persistencia atómica únicamente si todas las semanas resultan factibles y coherentes).
   - Barra interactiva de navegación con pestañas tipo *pill* para alternar instantáneamente entre todas las semanas generadas sin recargar.
 - **Matriz de Demanda Personalizable por Semana**:
   - Cada semana a planificar puede tener su propia dotación de personal específica por turno y día (ideal para semanas con eventos especiales o picos de trabajo).
   - Pestañas de selección rápida dentro del bloque de demanda para editar la matriz de cualquier semana individual.
   - Botón `📋 Copiar a todas las semanas` para propagar los valores de una semana a todo el horizonte planificado en un solo clic.
-- **Alternancia Estricta de Turnos Semana a Semana**:
+- **Alternancia Estricta de Turnos Semana a Semana (Estrategia Abierta OCP)**:
   - Los empleados 2 a N alternan de forma exacta entre dos modalidades de turno de semana a semana:
     - **Semana impar**: **3 turnos de Mañana** + **2 turnos de Tarde** (o viceversa).
     - **Semana par**: **2 turnos de Mañana** + **3 turnos de Tarde**.
@@ -59,92 +61,136 @@ Funciona de forma **híbrida (Offline-First)**: opera al 100% en el navegador co
   - **Excel / CSV**: Exportación con codificación UTF-8 BOM compatible con Microsoft Excel y Google Sheets.
   - **Compartir por WhatsApp**: Formateador de texto estructurado con emojis listo para copiar al portapapeles o enviar por mensajería.
 - **Nube y Sincronización (Supabase)**:
-  - Autenticación de usuario.
-  - Sincronización automática de configuraciones (`user_config`) y cuadrantes generados (`weekly_schedules`) con debouncing para evitar peticiones redundantes.
+  - Autenticación de usuario desacoplada mediante `AuthPort`.
+  - Sincronización automática de configuraciones (`user_config`) y cuadrantes generados (`weekly_schedules`) vía `SyncPort` y `PersistenceNotifier`.
   - Seguridad a nivel de fila mediante Row Level Security (RLS).
 
 ---
 
-## 📋 Reglas del Motor de Planificación
+## 🏛️ Arquitectura del Software (Clean Architecture + SOLID)
 
-El motor (`Scheduler` en [`src/scheduler.js`](file:///home/d4rkd4y/workspace/turnos/src/scheduler.js)) opera bajo el principio de que **la demanda manda y el patrón rotativo es la preferencia**, estructurado en 4 fases:
+El proyecto está diseñado bajo una arquitectura limpia por funcionalidades (**Feature-First**) que garantiza que el núcleo de negocio sea totalmente independiente de frameworks, APIs del navegador y librerías externas.
 
-1. **Validaciones de Capacidad y Factibilidad**:
-   - **Capacidad Total Exacta**: La demanda total de la semana debe ser exactamente igual a la capacidad de la plantilla ($\text{Empleados} \times 5$ días laborables).
-   - **Capacidad Diaria y Mínimos**: Ningún día puede superar la plantilla total $N$, exigiendo un mínimo de 2 empleados por turno (Lunes a Jueves) y 3 empleados por turno (Viernes a Domingo).
-   - **Capacidad de Mañanas**: La demanda total de mañanas debe ser suficiente para cubrir las 5 mañanas del Empleado 1 y al menos 1 mañana para cada uno de los restantes $N - 1$ empleados ($\text{Demanda Mañanas} \ge N + 4$).
-   - **Factibilidad por Descomposición en Pares Consecutivos**: A partir de los descansos necesarios cada día ($off[d] = N - (\text{Mañana}_d + \text{Tarde}_d)$), el motor resuelve el sistema circular de 7 ecuaciones $c[k-1] + c[k] = off[k]$ (mód 7). Si algún $c[k]$ resulta no entero o negativo, la demanda diaria se rechaza limpiamente con indicación del día con conflicto.
-2. **Fase 1 y 2 (Asignación de Descansos por Preferencia)**:
-   - Determina el par rotativo preferido según el avance cíclico semanal (+1 estricto, módulo 7).
-   - **Asignación por preferencia**: Se asigna primero el par rotativo correspondiente a cada empleado si hay cuota $c[k] > 0$ disponible.
-   - **Desviación mínima**: Si la demanda restringe las cuotas de su par, se le asigna el par alternativo disponible con la mínima distancia circular. El auditor marcará el estado como "Modificado" (badge ámbar).
-   - Todos los empleados reciben estrictamente 2 días libres continuos (`L`).
-   - Para el Empleado 1 (Mar / Clave), se asigna turno de Mañana (`M`) en sus 5 días laborables restantes.
-3. **Fase 3 (Asignación de Turnos Mañana/Tarde y Mínimo Garantizado)**:
-   - Asigna los turnos restantes (`M` y `T`) respetando los objetivos de rotación semanal y balanceando la carga.
-   - Aplica un paso de reparación estricta para asegurar que **todos los empleados tengan al menos 1 turno de mañana**.
-4. **Fase 4 (Optimización Ergonómica)**:
-   - Detecta transiciones `T -> M` entre días consecutivos y ejecuta intercambios bidireccionales globales entre trabajadores sin alterar días libres ni la demanda diaria.
+### Regla de Dependencia y Capas
+
+```
+┌────────────────────────────────────────────────────────┐
+│                   PRESENTATION                         │
+│  (Views, Controllers, CSS, DOM, HTML, Modales, Toast)  │
+└───────────────────────────┬────────────────────────────┘
+                            │ depends on
+┌───────────────────────────▼────────────────────────────┐
+│                  APPLICATION / USE CASES               │
+│     (GenerateSchedulesUseCase, Ports/Interfaces)       │
+└───────────────────────────┬────────────────────────────┘
+                            │ depends on
+┌───────────────────────────▼────────────────────────────┐
+│                         DOMAIN                         │
+│ (Entities, Rules: Demand, Patterns, Pure Assignment)   │
+└────────────────────────────────────────────────────────┘
+                            ▲
+                            │ implements ports
+┌───────────────────────────┴────────────────────────────┐
+│                    INFRASTRUCTURE                      │
+│ (LocalStorage, Repositories, Adapters: Supabase/Share) │
+└────────────────────────────────────────────────────────┘
+```
+
+1. **Domain (Núcleo)**: Funciones y entidades 100% puras sin dependencias de I/O ni DOM (`rules/demand.js`, `patterns.js`, `scheduler.js`, `audit-schedule.js`, `csv-builder.js`, `share-text.js`). Testeables instantáneamente en Node.js.
+2. **Application (Casos de Uso & Puertos)**: Coordinación de flujos de negocio (`generate-schedules.usecase.js`) e interfaces abstractas mediante JSDoc `@typedef` (`ports.js`).
+3. **Infrastructure (Adaptadores)**: Implementación de contratos de persistencia, red y utilidades externas (`local-schedule.repository.js`, `supabase-auth.adapter.js`, `supabase-sync.adapter.js`, `dom-download.adapter.js`, `navigator-share.adapter.js`).
+4. **Presentation (Vistas y Controladores)**: Componentes desacoplados orientados a la UI (`schedule-view.js`, `employee-names-view.js`, `demand-view.js`, `week-nav-view.js`) y controladores específicos.
+5. **Composition Root (`src/main.js`)**: Punto de entrada único que instancia los adaptadores, repositorios, vistas y controladores conectándolos sin que la UI contenga lógica de negocio.
 
 ---
 
-## 🖥️ Estructura del Proyecto
-
-El código está organizado de manera modular en módulos ES6 estándar:
+## 🖥️ Estructura del Código
 
 ```
 .
-├── index.html                  # Marcado semántico, contenedores y modal de autenticación
-├── style.css                   # Variables CSS, diseño responsivo, temas claro/oscuro e impresión
-├── manifest.json               # Configuración PWA (iconos, colores, modo standalone)
-├── sw.js                       # Service Worker para caché y funcionamiento offline
-├── netlify.toml                # Configuración de despliegue en Netlify, headers y caché
-├── package.json                # Configuración de scripts de prueba (sin dependencias de runtime)
-├── icon-192.png / icon-512.png # Iconos para PWA
-├── icon.svg                    # Icono vectorial principal
+├── index.html                           # Marcado semántico y contenedores
+├── style.css                            # Variables CSS, diseño responsivo y temas
+├── manifest.json                        # Manifiesto de PWA
+├── sw.js                                # Service Worker con precache y control de versiones
+├── jsconfig.json                        # Verificación estática con TypeScript (allowJs + checkJs)
 │
-├── src/                        # Código fuente modular (ES6 Modules)
-│   ├── app.js                  # Orquestador principal, generación multi-semana atómica y eventos
-│   ├── scheduler.js            # Motor heurístico con descomposición en pares y preferencia rotativa
-│   ├── renderer.js             # Renderizado del cuadrante, ciclo mod7 y controles
-│   ├── auditor.js              # Validación en vivo de balances e invariantes
-│   ├── exporter.js             # Exportación a PDF, Excel (CSV) y formato WhatsApp
-│   ├── individual.js           # Vista y tarjetas de horario individual por empleado
-│   ├── storage.js              # Capa de abstracción para persistencia en localStorage
-│   ├── sync.js                 # Gestor de sincronización bidireccional (pull/push) con Supabase
-│   ├── supabase.js             # Inicialización y cliente de Supabase BaaS
-│   ├── theme.js                # Control de tema (modo oscuro/claro)
-│   ├── toast.js                # Notificaciones toast flotantes
-│   ├── help.js                 # Modal de ayuda interactiva y explicación de reglas
-│   └── constants.js            # Constantes de negocio y patrones rotativos
+├── src/
+│   ├── main.js                          # Composition Root: cableado de dependencias y arranque
+│   │
+│   ├── core/                            # Shared Kernel reutilizable
+│   │   ├── constants/                   # Constantes de dominio y storage
+│   │   ├── date.js                      # Utilidades de fechas puras (cálculo de lunes, diffs)
+│   │   ├── html.js                      # Sanitización y escape HTML puro
+│   │   ├── ports/store.port.js          # Interfaz KeyValueStore
+│   │   └── infrastructure/
+│   │       ├── local-storage.store.js   # Almacenamiento versionado en localStorage
+│   │       ├── memory.store.js          # Almacén en memoria para tests
+│   │       ├── navigation.service.js    # Servicio pub/sub desacoplado de navegación
+│   │       └── persistence-notifier.js  # Notificador reactivo de persistencia local
+│   │
+│   ├── features/
+│   │   ├── scheduling/                  # Feature de generación de cuadrantes
+│   │   │   ├── domain/                  # Entidades, reglas de demanda y álgebra mod-7
+│   │   │   ├── application/             # Caso de uso atómico two-phase commit y puertos
+│   │   │   ├── infrastructure/          # Repositorio de cuadrantes (LocalScheduleRepository)
+│   │   │   └── presentation/            # ScheduleView y ScheduleController
+│   │   │
+│   │   ├── audit/                       # Feature de auditoría y balance en vivo
+│   │   │   ├── domain/                  # auditSchedule puro y AuditReport DTO
+│   │   │   └── presentation/            # AuditView (renderizado de tags y tabla de equidad)
+│   │   │
+│   │   ├── settings/                    # Feature de ajustes de plantilla y demanda
+│   │   │   ├── application/             # Puertos de configuración
+│   │   │   ├── infrastructure/          # LocalSettingsRepository
+│   │   │   └── presentation/            # EmployeeNamesView, DemandView, WeekNavView, SettingsController
+│   │   │
+│   │   ├── auth/                        # Feature de autenticación
+│   │   │   ├── application/ports.js     # AuthPort
+│   │   │   ├── infrastructure/          # SupabaseAuthAdapter y configuración
+│   │   │   └── presentation/            # AuthController
+│   │   │
+│   │   ├── sync/                        # Feature de sincronización en la nube
+│   │   │   ├── application/ports.js     # SyncPort
+│   │   │   └── infrastructure/          # SupabaseSyncAdapter y NullSyncAdapter (offline)
+│   │   │
+│   │   ├── export/                      # Feature de exportación
+│   │   │   ├── domain/                  # csv-builder y share-text puros
+│   │   │   └── infrastructure/          # Adaptadores: DOM download, Web Share, html2pdf
+│   │   │
+│   │   └── individual/                  # Feature de vista individual por empleado
+│   │       └── presentation/            # IndividualViewPresentation e IndividualController
+│   │
+│   └── (shims de compatibilidad transitoria: app.js, renderer.js, exporter.js, etc.)
 │
-├── supabase/                   # Configuración y migraciones de Supabase
-│   ├── config.toml             # Configuración del entorno Supabase CLI
-│   └── migrations/
-│       └── 20260925000000_init_schema.sql  # Esquema de tablas con RLS y WITH CHECK
-│
-└── tests/                      # Suite de pruebas automatizadas
-    └── scheduler.test.js       # Pruebas unitarias para el motor de planificación
+└── tests/                               # Suite de pruebas automatizadas (Node.js Test Runner)
+    ├── html-contracts.test.js           # Validación de integridad de selectores DOM
+    ├── date.test.js                     # Operaciones matemáticas de calendario
+    ├── demand-rules.test.js             # Reglas unificadas de demanda
+    ├── patterns.test.js                 # Álgebra cíclica mod-7 y modos de turno
+    ├── generate-schedules.usecase.test.js # Caso de uso multi-semana con dobles en memoria
+    ├── audit.test.js                    # Motor de auditoría y cálculo de balance
+    ├── store.test.js                    # Almacenes de clave-valor y aislamiento
+    ├── repositories.test.js             # Repositorios de persistencia
+    ├── auth-sync.test.js                # Adaptadores de Auth, Sync y NavigationService
+    ├── presentation.test.js             # Vistas de presentación y fachadas
+    ├── csv-builder.test.js              # Generación de archivos CSV con BOM UTF-8
+    ├── share-text.test.js               # Formateador de horarios para WhatsApp
+    └── scheduler.test.js                # Tests de regresión del motor heurístico
 ```
 
 ---
 
-## 🧪 Pruebas Automatizadas
+## 🧪 Pruebas Automatizadas y Verificación
 
-El proyecto utiliza el *test runner* nativo de **Node.js**:
+La suite de pruebas se ejecuta directamente con el *test runner* nativo de **Node.js** (sin dependencias de empaquetado):
 
 ```bash
+# Ejecutar suite de pruebas unitarias y de integración (48 tests)
 npm test
-```
 
-Las pruebas cubren:
-- **Rechazo de demandas infactibles**: Sobredemanda o dotaciones por debajo del mínimo legal.
-- **Happy path e invariantes**: 5 turnos por empleado, al menos 1 M para todos, 5M para el empleado clave y cobertura diaria exacta coincidiendo con la demanda.
-- **Patrón personalizado con demanda estándar**: Asignación exitosa respetando exactamente 2 libres consecutivos por empleado.
-- **Rotación multi-semana**: Simulación de 7 semanas consecutivas (+k mód 7) con cobertura exacta.
-- **Infactibilidad por pares rotativos**: Detección y rechazo limpio cuando la demanda diaria arroja cuotas negativas ($c[k] < 0$).
-- **Control estricto de capacidad**: Rechazo si la demanda semanal no iguala exactamente $N \times 5$.
-- **Límite de desviaciones**: Garantía de que $\le 2$ empleados se desvíen de su patrón preferido en condiciones estándar.
+# Ejecutar verificación estática de tipos con TypeScript (JSDoc)
+npm run check
+```
 
 ---
 
@@ -183,7 +229,6 @@ Puedes servir los archivos con cualquier servidor HTTP estático:
   ```bash
   python3 -m http.server 8000
   ```
-- **Con VS Code**: Usa la extensión *Live Server*.
 
 ### Despliegue en Producción
 
@@ -191,14 +236,3 @@ El proyecto está preparado para plataformas de hosting estático:
 
 - **Netlify**: Incluye [`netlify.toml`](file:///home/d4rkd4y/workspace/turnos/netlify.toml) preconfigurado que ejecuta `npm test` antes del despliegue y aplica cabeceras de seguridad (`X-Frame-Options`, `nosniff`, `Referrer-Policy`) y políticas de caché óptimas para PWA y assets.
 - **Vercel / GitHub Pages**: Compatible directamente publicando la raíz del repositorio.
-
----
-
-## 🛠️ Tecnologías
-
-- **HTML5 & CSS3**: Diseño responsivo con CSS Grid, Flexbox, variables CSS nativas y soporte para modo oscuro.
-- **JavaScript (Vanilla ES6+ Modules)**: Código modular sin empaquetadores complejos (*bundlerless*).
-- **Supabase**: Backend-as-a-Service para autenticación de usuarios y base de datos PostgreSQL con RLS.
-- **PWA (Progressive Web App)**: Service Worker nativo y Web App Manifest para funcionamiento offline.
-- **html2pdf.js**: Generación cliente de documentos PDF en formato apaisado.
-- **Node.js Test Runner**: Pruebas automatizadas de lógica de negocio sin dependencias externas pesadas.
