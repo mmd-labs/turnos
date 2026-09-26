@@ -36,3 +36,30 @@ test('csv-builder: manejo seguro de parámetros nulos o incompletos', () => {
   assert.strictEqual(buildScheduleCSV({ matrix: [], employees: null, weekStart: '2026-03-30' }), '');
   assert.strictEqual(buildScheduleCSV({ matrix: [], employees: ['Ana'], weekStart: '' }), '');
 });
+
+test('csv-builder: exportación de filas y columnas para Vacaciones y Baja con horas laborables correctas', () => {
+  const employees = ['Carlos', 'Diana'];
+  const matrix = [
+    ['V', 'V', 'V', 'V', 'V', 'L', 'L'], // Carlos: 5 Vacaciones, 2 Libres -> 0 h
+    ['B', 'B', 'M', 'M', 'T', 'L', 'L'], // Diana: 2 Bajas, 2 Mañanas, 1 Tarde, 2 Libres -> 24 h
+  ];
+  const weekStart = '2026-03-30';
+
+  const csv = buildScheduleCSV({ matrix, employees, weekStart });
+
+  // Comprobar filas de la matriz
+  assert.ok(csv.includes('"Vacaciones";"Carlos"'));
+  assert.ok(csv.includes('"Baja";"Diana"'));
+
+  // Comprobar encabezados de desglose
+  assert.ok(csv.includes('"Vacaciones"'));
+  assert.ok(csv.includes('"Bajas"'));
+  assert.ok(csv.includes('"Total Horas (8h/turno laborable)"'));
+
+  // Comprobar cálculo de horas laborables
+  assert.ok(csv.includes('"Carlos"'));
+  assert.ok(csv.includes('"0 h"'), 'Carlos no tiene horas laborables al estar de vacaciones');
+  assert.ok(csv.includes('"Diana"'));
+  assert.ok(csv.includes('"24 h"'), 'Diana tiene 3 turnos trabajados x 8h = 24h');
+});
+

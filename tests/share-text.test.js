@@ -56,3 +56,39 @@ test('share-text: manejo seguro de parámetros nulos o ausentes', () => {
     shiftModeLabel: '',
   }), '');
 });
+
+test('share-text: inclusión de Vacaciones y Baja en cuadrante global e individual', () => {
+  const employees = ['Carlos', 'Diana'];
+  const matrix = [
+    ['V', 'V', 'V', 'V', 'V', 'L', 'L'],
+    ['B', 'B', 'M', 'T', 'M', 'L', 'L'],
+  ];
+  const weekStart = '2026-03-30';
+
+  const globalText = buildScheduleShareText({ matrix, employees, weekStart });
+  assert.ok(globalText.includes('🌴 Vacaciones: Carlos'));
+  assert.ok(globalText.includes('🩹 Baja: Diana'));
+
+  const indivCarlos = buildIndividualShareText({
+    matrix,
+    employees,
+    weekStart,
+    empIndex: 0,
+    patternWeek: 1,
+    patternLabel: 'Semana 1',
+    shiftModeLabel: 'Vacaciones',
+  });
+  assert.ok(indivCarlos.includes('🌴 Vacaciones'));
+
+  const indivDiana = buildIndividualShareText({
+    matrix,
+    employees,
+    weekStart,
+    empIndex: 1,
+    patternWeek: 2,
+    patternLabel: 'Semana 2',
+    shiftModeLabel: 'Rotativo',
+  });
+  assert.ok(indivDiana.includes('🩹 Baja'));
+});
+

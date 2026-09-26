@@ -60,19 +60,27 @@ export function renderAuditView(report) {
 
   // 5. Equity Table
   if (equityContainer) {
-    let html = '<table class="equity-table"><thead><tr><th>Empleado</th><th>Patrón Rotativo</th><th>Alternancia Turnos</th><th>Turnos Mañana</th><th>Turnos Tarde</th><th>Días Libres</th><th>Horas Semanales</th></tr></thead><tbody>';
+    let html = '<table class="equity-table"><thead><tr><th>Empleado</th><th>Patrón Rotativo</th><th>Alternancia Turnos</th><th>Turnos Mañana</th><th>Turnos Tarde</th><th>Días Libres</th><th>Vacaciones</th><th>Bajas</th><th>Horas Semanales</th></tr></thead><tbody>';
     report.empStats.forEach(stat => {
-      const mNotice = stat.m === 0 ? ' <span title="Se requiere al menos 1 turno de mañana" style="color:var(--color-danger); font-size:0.75rem;">⚠️ Mín. 1 M</span>' : '';
+      const mNotice = (stat.m === 0 && !stat.isFullAbsence) ? ' <span title="Se requiere al menos 1 turno de mañana" style="color:var(--color-danger); font-size:0.75rem;">⚠️ Mín. 1 M</span>' : '';
       const tNotice = (stat.isKey && stat.t > 0) ? ' <span title="El empleado clave debe ser solo mañana" style="color:var(--color-danger); font-size:0.75rem;">⚠️ Solo M</span>' : '';
       const consecNotice = (!stat.isConsecutive && stat.l === 2) ? ' <span title="Los 2 días libres deben ser seguidos" style="color:var(--color-warning); font-size:0.75rem;">⚠️ No seguidos</span>' : '';
 
-      const patternBadge = stat.matchesPattern
-        ? `<span class="badge badge--success" style="font-size:0.75rem;">Sem. ${stat.pWeek} (${stat.pLabel})</span>`
-        : `<span class="badge badge--warning" style="font-size:0.75rem;" title="Días libres modificados respecto al patrón de esta semana">Sem. ${stat.pWeek} (Modificado)</span>`;
+      const patternBadge = stat.isFullAbsence
+        ? `<span class="badge badge--success" style="font-size:0.75rem;">Ausencia</span>`
+        : (stat.matchesPattern
+          ? `<span class="badge badge--success" style="font-size:0.75rem;">Sem. ${stat.pWeek} (${stat.pLabel})</span>`
+          : `<span class="badge badge--warning" style="font-size:0.75rem;" title="Días libres modificados respecto al patrón de esta semana">Sem. ${stat.pWeek} (Modificado)</span>`);
 
-      const shiftBadge = stat.matchesShiftTarget
-        ? `<span class="badge badge--success" style="font-size:0.75rem;">${stat.targetM}M / ${stat.targetT}T ✅</span>`
-        : `<span class="badge badge--warning" style="font-size:0.75rem;" title="Objetivo semana: ${stat.targetM}M / ${stat.targetT}T">${stat.targetM}M / ${stat.targetT}T ⚠️</span>`;
+      let shiftBadge;
+      if (stat.isFullAbsence) {
+        const absenceLabel = (stat.v || 0) >= (stat.b || 0) ? '🌴 Vacaciones' : '🩹 Baja';
+        shiftBadge = `<span class="badge badge--success" style="font-size:0.75rem;">${absenceLabel}</span>`;
+      } else {
+        shiftBadge = stat.matchesShiftTarget
+          ? `<span class="badge badge--success" style="font-size:0.75rem;">${stat.targetM}M / ${stat.targetT}T ✅</span>`
+          : `<span class="badge badge--warning" style="font-size:0.75rem;" title="Objetivo semana: ${stat.targetM}M / ${stat.targetT}T">${stat.targetM}M / ${stat.targetT}T ⚠️</span>`;
+      }
 
       const nameText = stat.isKey
         ? `${escapeHtml(stat.name)} <span style="font-size:0.75rem; color:var(--text-muted); font-weight:normal;">(Clave)</span>`
@@ -85,6 +93,8 @@ export function renderAuditView(report) {
         <td><span style="color:var(--color-morning); font-weight:700;">${stat.m}</span>${mNotice}</td>
         <td><span style="color:var(--color-afternoon); font-weight:700;">${stat.t}</span>${tNotice}</td>
         <td><span style="color:var(--color-free); font-weight:700;">${stat.l}</span>${consecNotice}</td>
+        <td><span style="color:var(--color-vacation); font-weight:700;">${stat.v || 0}</span></td>
+        <td><span style="color:var(--color-leave); font-weight:700;">${stat.b || 0}</span></td>
         <td><strong>${stat.hours} h</strong></td>
       </tr>`;
     });

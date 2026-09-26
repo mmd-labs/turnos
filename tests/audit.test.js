@@ -104,3 +104,65 @@ test('audit: detección de violaciones conocidas produce badge--danger', () => {
   assert.strictEqual(report.globalBadgeClass, 'badge--danger');
   assert.ok(report.globalBadgeText.includes('Ajuste requerido'));
 });
+
+test('audit: empleado con semana completa de Vacaciones o Baja no genera falsas violaciones de libres ni mañanas', () => {
+  const employees = ['E1_Clave', 'E2_Vacaciones', 'E3_Baja'];
+  const matrix = [
+    ['M', 'M', 'M', 'M', 'M', 'L', 'L'], // Clave 5M 2L
+    ['V', 'V', 'V', 'V', 'V', 'V', 'V'], // Vacaciones toda la semana
+    ['B', 'B', 'B', 'B', 'B', 'B', 'B'], // Baja toda la semana
+  ];
+  const demand = {
+    morning: [1, 1, 1, 1, 1, 0, 0],
+    afternoon: [0, 0, 0, 0, 0, 0, 0]
+  };
+
+  const report = auditSchedule(matrix, employees, demand, {
+    weekStart: '2026-09-28',
+    getPatternWeek: () => 1,
+    getShiftMode: (e) => (e === 0 ? '5M0T' : '3M2T')
+  });
+
+  assert.ok(report !== null);
+  assert.strictEqual(report.totalMorningIssues, 0, 'No debe penalizar por mañanas a quien está de vacaciones o baja');
+  assert.strictEqual(report.totalOffdayMismatches, 0, 'No debe penalizar días libres a quien tiene ausencia completa');
+  assert.strictEqual(report.totalConsecutiveMismatches, 0, 'No debe exigir libres consecutivos a quien no trabaja');
+
+  // Comprobar cómputo de horas y estado de ausencia
+  const statVac = report.empStats[1];
+  assert.strictEqual(statVac.hours, 0, 'Vacaciones computan 0 horas laborables');
+  assert.strictEqual(statVac.v, 7);
+  assert.strictEqual(statVac.isFullAbsence, true);
+  assert.strictEqual(statVac.statusClass, 'ok');
+
+  const statBaja = report.empStats[2];
+  assert.strictEqual(statBaja.hours, 0, 'Baja médica computa 0 horas laborables');
+  assert.strictEqual(statBaja.b, 7);
+  assert.strictEqual(statBaja.isFullAbsence, true);
+  assert.strictEqual(statBaja.statusClass, 'ok');
+});
+
+test('audit: empleado con ausencia parcial computa horas laborables proporcionalmente', () => {
+  const employees = ['E1'];
+  const matrix = [
+    ['V', 'V', 'M', 'M', 'M', 'L', 'L'], // 2 Vacaciones, 3 Mañanas, 2 Libres
+  ];
+  const demand = {
+    morning: [0, 0, 1, 1, 1, 0, 0],
+    afternoon: [0, 0, 0, 0, 0, 0, 0]
+  };
+
+  const report = auditSchedule(matrix, employees, demand, {
+    weekStart: '2026-09-28',
+    getPatternWeek: () => 1,
+    getShiftMode: () => '3M2T'
+  });
+
+  assert.ok(report !== null);
+  const stat = report.empStats[0];
+  assert.strictEqual(stat.v, 2);
+  assert.strictEqual(stat.m, 3);
+  assert.strictEqual(stat.l, 2);
+  assert.strictEqual(stat.hours, 24, '3 mañanas x 8h = 24h laborables');
+});
+

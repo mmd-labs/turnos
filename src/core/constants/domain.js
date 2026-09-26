@@ -28,3 +28,22 @@ export const DEFAULT_EMPLOYEE_SHIFT_MODES = [
 export const CONSECUTIVE_PAIRS = [
   [0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 0],
 ];
+
+export const SHIFT_DEFINITIONS = {
+  M: { key: 'M', label: 'Mañana', shortLabel: 'M', emoji: '☀️', cssClass: 'morning', isWork: true, hours: 8 },
+  T: { key: 'T', label: 'Tarde', shortLabel: 'T', emoji: '🌅', cssClass: 'afternoon', isWork: true, hours: 8 },
+  L: { key: 'L', label: 'Libre', shortLabel: 'L', emoji: '🏖️', cssClass: 'free', isWork: false, hours: 0 },
+  V: { key: 'V', label: 'Vacaciones', shortLabel: 'V', emoji: '🌴', cssClass: 'vacation', isWork: false, hours: 0 },
+  B: { key: 'B', label: 'Baja', shortLabel: 'B', emoji: '🩹', cssClass: 'leave', isWork: false, hours: 0 },
+};
+
+export const SHIFT_DEFS_LIST = [
+  SHIFT_DEFINITIONS.M,
+  SHIFT_DEFINITIONS.T,
+  SHIFT_DEFINITIONS.L,
+  SHIFT_DEFINITIONS.V,
+  SHIFT_DEFINITIONS.B,
+];
+
+export const SHIFT_KEYS = ['M', 'T', 'L', 'V', 'B'];
+

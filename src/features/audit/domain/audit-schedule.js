@@ -87,18 +87,29 @@ export function auditSchedule(matrix, employees, demand, context = {}) {
     let countL = 0;
     let countM = 0;
     let countT = 0;
+    let countV = 0;
+    let countB = 0;
     const offDays = [];
     for (let d = 0; d < 7; d++) {
       const s = matrix[e] ? matrix[e][d] : 'L';
       if (s === 'L') {
         countL++;
         offDays.push(d);
-      } else if (s === 'M') countM++;
-      else if (s === 'T') countT++;
+      } else if (s === 'M') {
+        countM++;
+      } else if (s === 'T') {
+        countT++;
+      } else if (s === 'V') {
+        countV++;
+      } else if (s === 'B') {
+        countB++;
+      }
     }
+    const absences = countV + countB;
+    const isFullAbsence = absences >= 5 || (countM + countT === 0 && absences > 0);
     const isKey = (e === 0);
-    const is2Off = countL === 2;
-    const isConsecutive = is2Off && ((offDays[1] - offDays[0] === 1) || (offDays[0] === 0 && offDays[1] === 6));
+    const is2Off = countL === 2 || isFullAbsence;
+    const isConsecutive = isFullAbsence || (countL === 2 && ((offDays[1] - offDays[0] === 1) || (offDays[0] === 0 && offDays[1] === 6)));
 
     let pWeek;
     if (typeof context.getPatternWeek === 'function') {
@@ -113,7 +124,7 @@ export function auditSchedule(matrix, employees, demand, context = {}) {
     }
 
     const pItem = ROTATING_OFF_PATTERN[pWeek - 1] || ROTATING_OFF_PATTERN[0];
-    const matchesPattern = is2Off && isConsecutive && (offDays[0] === pItem.days[0] && offDays[1] === pItem.days[1]);
+    const matchesPattern = isFullAbsence || (is2Off && isConsecutive && (offDays[0] === pItem.days[0] && offDays[1] === pItem.days[1]));
 
     let shiftMode;
     if (typeof context.getShiftMode === 'function') {
@@ -126,22 +137,38 @@ export function auditSchedule(matrix, employees, demand, context = {}) {
     const strategy = getShiftStrategy(shiftMode);
     const targetM = (e === 0 || shiftMode === '5M0T') ? 5 : strategy.m;
     const targetT = (e === 0 || shiftMode === '5M0T') ? 0 : strategy.t;
-    const matchesShiftTarget = (countM === targetM && countT === targetT);
+    const matchesShiftTarget = isFullAbsence
+      ? (countM + countT === 0)
+      : (countM === targetM && countT === targetT);
 
     if (!is2Off) totalOffdayMismatches++;
     if (is2Off && !isConsecutive) totalConsecutiveMismatches++;
     if (isKey && countT > 0) totalMorningIssues++;
-    if (countM === 0) totalMorningIssues++;
+    if (countM === 0 && !isFullAbsence && (countM + countT > 0 || absences === 0)) totalMorningIssues++;
 
     let statusClass = (is2Off && isConsecutive && matchesPattern)
       ? 'ok'
       : (!is2Off ? (countL < 2 ? 'err' : 'warn') : 'warn');
 
     let consecNotice = '';
-    if (is2Off && !isConsecutive) {
+    if (isFullAbsence) {
+      const absenceType = countV >= countB ? 'Vacaciones' : 'Baja';
+      consecNotice = ` (${absenceType})`;
+    } else if (is2Off && !isConsecutive) {
       consecNotice = ' ⚠️ No seguidos';
     } else if (is2Off && !matchesPattern) {
       consecNotice = ' ℹ️ Modificado';
+    }
+
+    let tagText = `${employees[e]}: ${countL}/2 Libres [Sem.${pWeek}]${consecNotice}`;
+    if (isFullAbsence) {
+      const absenceType = countV >= countB ? 'Vacaciones' : 'Baja';
+      tagText = `${employees[e]}: ${absenceType} (${absences}d) [Sem.${pWeek}]`;
+    } else if (absences > 0) {
+      const abDetails = [];
+      if (countV > 0) abDetails.push(`${countV}V`);
+      if (countB > 0) abDetails.push(`${countB}B`);
+      tagText = `${employees[e]}: ${countL}/2 Libres [${abDetails.join(', ')}] [Sem.${pWeek}]${consecNotice}`;
     }
 
     empStats.push({
@@ -149,6 +176,10 @@ export function auditSchedule(matrix, employees, demand, context = {}) {
       m: countM,
       t: countT,
       l: countL,
+      v: countV,
+      b: countB,
+      absences,
+      isFullAbsence,
       hours: (countM + countT) * 8,
       isKey,
       isConsecutive,
@@ -160,7 +191,7 @@ export function auditSchedule(matrix, employees, demand, context = {}) {
       targetT,
       matchesShiftTarget,
       statusClass,
-      tagText: `${employees[e]}: ${countL}/2 Libres [Sem.${pWeek}]${consecNotice}`,
+      tagText,
       consecNotice
     });
   }

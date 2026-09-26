@@ -1,5 +1,6 @@
 import { escapeHtml } from '../../../core/html.js';
 import { getDayDates, formatDateLong } from '../../../core/date.js';
+import { SHIFT_DEFS_LIST, SHIFT_KEYS } from '../../../core/constants/domain.js';
 
 /**
  * @typedef {Object} DayDateInfo
@@ -95,14 +96,10 @@ export class ScheduleView {
     // Update schedule week badge
     this.updateWeekBadge(this.currentWeekStart);
 
-    // 2. Render Table Body: 3 rows (Mañana, Tarde, Libre)
+    // 2. Render Table Body: 5 rows (Mañana, Tarde, Libre, Vacaciones, Baja)
     if (!this.scheduleBody) return;
     this.scheduleBody.innerHTML = '';
-    const shiftDefs = [
-      { key: 'M', label: 'Mañana', cssClass: 'morning' },
-      { key: 'T', label: 'Tarde', cssClass: 'afternoon' },
-      { key: 'L', label: 'Libre', cssClass: 'free' },
-    ];
+    const shiftDefs = SHIFT_DEFS_LIST;
 
     shiftDefs.forEach(shift => {
       const tr = document.createElement('tr');
@@ -151,7 +148,7 @@ export class ScheduleView {
             select.dataset.day = String(d);
             select.title = 'Cambiar turno';
 
-            ['M', 'T', 'L'].forEach(val => {
+            SHIFT_KEYS.forEach(val => {
               const opt = document.createElement('option');
               opt.value = val;
               opt.textContent = val;
@@ -245,11 +242,7 @@ export class ScheduleView {
     table.appendChild(thead);
 
     const tbody = document.createElement('tbody');
-    const shiftDefs = [
-      { key: 'M', label: 'Mañana', cssClass: 'morning' },
-      { key: 'T', label: 'Tarde', cssClass: 'afternoon' },
-      { key: 'L', label: 'Libre', cssClass: 'free' },
-    ];
+    const shiftDefs = SHIFT_DEFS_LIST;
 
     shiftDefs.forEach(shift => {
       const tr = document.createElement('tr');

@@ -1,10 +1,10 @@
 /**
- * @typedef {'M' | 'T' | 'L'} ShiftType
+ * @typedef {'M' | 'T' | 'L' | 'V' | 'B'} ShiftType
  */
 
 /**
  * @typedef {ShiftType[][]} WeekMatrix
- * matrix[employeeIndex][dayIndex] = 'M' | 'T' | 'L'
+ * matrix[employeeIndex][dayIndex] = 'M' | 'T' | 'L' | 'V' | 'B'
  */
 
 /**

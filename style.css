@@ -11,6 +11,10 @@
   --color-afternoon-bg: #ffedd5;
   --color-free: #6b7280;
   --color-free-bg: #f3f4f6;
+  --color-vacation: #0d9488;
+  --color-vacation-bg: #ccfbf1;
+  --color-leave: #e11d48;
+  --color-leave-bg: #ffe4e6;
   --color-danger: #dc2626;
   --color-danger-bg: #fef2f2;
   --color-warning: #d97706;
@@ -42,6 +46,10 @@
   --color-afternoon-bg: #431407;
   --color-free: #e2e8f0;
   --color-free-bg: #334155;
+  --color-vacation: #2dd4bf;
+  --color-vacation-bg: #134e4a;
+  --color-leave: #fb7185;
+  --color-leave-bg: #4c0519;
   --color-danger: #f87171;
   --color-danger-bg: #450a0a;
   --color-warning: #fbbf24;
@@ -657,6 +665,16 @@ input::placeholder, textarea::placeholder {
   color: var(--color-free);
 }
 
+.row-label--vacation {
+  background: var(--color-vacation-bg);
+  color: var(--color-vacation);
+}
+
+.row-label--leave {
+  background: var(--color-leave-bg);
+  color: var(--color-leave);
+}
+
 .shift-cell {
   vertical-align: top;
   padding: 0.5rem;
@@ -675,6 +693,14 @@ input::placeholder, textarea::placeholder {
   background-color: #fbfbfb;
 }
 
+.shift-cell--vacation {
+  background-color: #f0fdfa;
+}
+
+.shift-cell--leave {
+  background-color: #fff1f2;
+}
+
 [data-theme="dark"] .shift-cell {
   background-color: #0f172a;
 }
@@ -689,6 +715,14 @@ input::placeholder, textarea::placeholder {
 
 [data-theme="dark"] .shift-cell--free {
   background-color: rgba(15, 23, 42, 0.8);
+}
+
+[data-theme="dark"] .shift-cell--vacation {
+  background-color: rgba(19, 78, 74, 0.25);
+}
+
+[data-theme="dark"] .shift-cell--leave {
+  background-color: rgba(76, 5, 25, 0.25);
 }
 
 .employee-pill-list {
@@ -723,6 +757,14 @@ input::placeholder, textarea::placeholder {
   border-left: 3px solid var(--color-free);
   color: var(--color-text);
   opacity: 0.9;
+}
+
+.employee-pill--vacation {
+  border-left: 3px solid var(--color-vacation);
+}
+
+.employee-pill--leave {
+  border-left: 3px solid var(--color-leave);
 }
 
 .employee-pill-name {
@@ -860,6 +902,16 @@ input::placeholder, textarea::placeholder {
   color: #4b5563;
 }
 
+.pdf-row-label--vacation {
+  background: #ccfbf1;
+  color: #0f766e;
+}
+
+.pdf-row-label--leave {
+  background: #ffe4e6;
+  color: #be123c;
+}
+
 .pdf-shift-cell {
   vertical-align: top;
   padding: 6px;
@@ -876,6 +928,14 @@ input::placeholder, textarea::placeholder {
 
 .pdf-cell-free {
   background: #fbfbfb;
+}
+
+.pdf-cell-vacation {
+  background: #f0fdfa;
+}
+
+.pdf-cell-leave {
+  background: #fff1f2;
 }
 
 .pdf-emp-name {
@@ -1525,6 +1585,16 @@ input::placeholder, textarea::placeholder {
 .indiv-shift-badge--free {
   background: var(--color-free-bg);
   color: var(--color-free);
+}
+
+.indiv-shift-badge--vacation {
+  background: var(--color-vacation-bg);
+  color: var(--color-vacation);
+}
+
+.indiv-shift-badge--leave {
+  background: var(--color-leave-bg);
+  color: var(--color-leave);
 }
 
 .modal-footer {

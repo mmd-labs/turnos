@@ -1,5 +1,6 @@
 import { getDayDates } from '../../../core/date.js';
 import { escapeHtml } from '../../../core/html.js';
+import { SHIFT_DEFINITIONS } from '../../../core/constants/domain.js';
 
 export class IndividualViewPresentation {
   constructor() {
@@ -59,16 +60,15 @@ export class IndividualViewPresentation {
   renderSelectedCards({ matrix, empIdx, weekStart }) {
     if (!this.cardsContainer) return;
     const dayDates = getDayDates(weekStart);
-    const shiftLabels = { M: 'Mañana', T: 'Tarde', L: 'Libre' };
-    const shiftClasses = { M: 'morning', T: 'afternoon', L: 'free' };
 
     this.cardsContainer.innerHTML = '';
     dayDates.forEach((d, dayIdx) => {
       const shiftKey = (matrix && matrix[empIdx]) ? matrix[empIdx][dayIdx] : 'L';
       const card = document.createElement('div');
       card.className = 'indiv-day-card';
-      const cssClass = shiftClasses[/** @type {'M'|'T'|'L'} */ (shiftKey)] || 'free';
-      const label = shiftLabels[/** @type {'M'|'T'|'L'} */ (shiftKey)] || 'Libre';
+      const shiftDef = SHIFT_DEFINITIONS[shiftKey] || SHIFT_DEFINITIONS.L;
+      const cssClass = shiftDef.cssClass;
+      const label = shiftDef.label;
 
       card.innerHTML = `
         <div class="indiv-day-name">${escapeHtml(d.name)}</div>

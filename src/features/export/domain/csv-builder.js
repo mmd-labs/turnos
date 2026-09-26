@@ -21,6 +21,8 @@ export function buildScheduleCSV({ matrix, employees, weekStart }) {
     { key: 'M', label: 'Mañana' },
     { key: 'T', label: 'Tarde' },
     { key: 'L', label: 'Libre' },
+    { key: 'V', label: 'Vacaciones' },
+    { key: 'B', label: 'Baja' },
   ];
 
   const rows = [
@@ -46,13 +48,15 @@ export function buildScheduleCSV({ matrix, employees, weekStart }) {
   // 2. Desglose individual por empleado
   rows.push([]);
   rows.push(['Desglose por Empleado']);
-  rows.push(['Empleado', ...dayDates.map(d => `${d.short} (${d.date})`), 'Mañanas', 'Tardes', 'Libres', 'Total Horas (8h/turno)']);
+  rows.push(['Empleado', ...dayDates.map(d => `${d.short} (${d.date})`), 'Mañanas', 'Tardes', 'Libres', 'Vacaciones', 'Bajas', 'Total Horas (8h/turno laborable)']);
 
   for (let e = 0; e < employees.length; e++) {
     const empRow = [employees[e]];
     let m = 0;
     let t = 0;
     let l = 0;
+    let v = 0;
+    let b = 0;
     for (let d = 0; d < 7; d++) {
       const s = matrix[e] ? matrix[e][d] : 'L';
       if (s === 'M') {
@@ -61,12 +65,18 @@ export function buildScheduleCSV({ matrix, employees, weekStart }) {
       } else if (s === 'T') {
         t++;
         empRow.push('Tarde');
+      } else if (s === 'V') {
+        v++;
+        empRow.push('Vacaciones');
+      } else if (s === 'B') {
+        b++;
+        empRow.push('Baja');
       } else {
         l++;
         empRow.push('Libre');
       }
     }
-    empRow.push(m, t, l, `${(m + t) * 8} h`);
+    empRow.push(m, t, l, v, b, `${(m + t) * 8} h`);
     rows.push(empRow);
   }
 

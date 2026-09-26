@@ -21,18 +21,29 @@ export function buildScheduleShareText({ matrix, employees, weekStart }) {
     const morningEmps = [];
     const afternoonEmps = [];
     const freeEmps = [];
+    const vacationEmps = [];
+    const leaveEmps = [];
 
     for (let e = 0; e < employees.length; e++) {
       const shift = matrix[e] ? matrix[e][dayIdx] : 'L';
       if (shift === 'M') morningEmps.push(employees[e]);
       else if (shift === 'T') afternoonEmps.push(employees[e]);
+      else if (shift === 'V') vacationEmps.push(employees[e]);
+      else if (shift === 'B') leaveEmps.push(employees[e]);
       else freeEmps.push(employees[e]);
     }
 
     text += `📍 *${d.name} (${d.date})*\n`;
     text += `☀️ Mañana: ${morningEmps.length ? morningEmps.join(', ') : 'Ninguno'}\n`;
     text += `🌅 Tarde: ${afternoonEmps.length ? afternoonEmps.join(', ') : 'Ninguno'}\n`;
-    text += `🏖️ Libre: ${freeEmps.length ? freeEmps.join(', ') : 'Ninguno'}\n\n`;
+    text += `🏖️ Libre: ${freeEmps.length ? freeEmps.join(', ') : 'Ninguno'}\n`;
+    if (vacationEmps.length) {
+      text += `🌴 Vacaciones: ${vacationEmps.join(', ')}\n`;
+    }
+    if (leaveEmps.length) {
+      text += `🩹 Baja: ${leaveEmps.join(', ')}\n`;
+    }
+    text += '\n';
   });
 
   return text.trim();
@@ -64,7 +75,13 @@ export function buildIndividualShareText({
 
   const empName = employees[empIndex] || `Empleado ${empIndex + 1}`;
   const dayDates = getDayDates(weekStart);
-  const shiftEmojis = { M: '☀️ Mañana', T: '🌅 Tarde', L: '🏖️ Libre' };
+  const shiftEmojis = {
+    M: '☀️ Mañana',
+    T: '🌅 Tarde',
+    L: '🏖️ Libre',
+    V: '🌴 Vacaciones',
+    B: '🩹 Baja',
+  };
 
   let msg = `👤 *Horario Semanal - ${empName}*\n`;
   msg += `🗓️ Semana del ${formatDateLong(weekStart)}\n`;
