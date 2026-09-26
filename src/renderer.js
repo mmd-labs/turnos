@@ -480,7 +480,7 @@ export const Renderer = {
             select.addEventListener('change', (e) => {
               const newShift = e.target.value;
               this.currentMatrix[empIdx][d] = newShift;
-              Storage.saveSchedule(this.currentMatrix, this.currentWeekStart);
+              Storage.saveSchedule(this.currentWeekStart, this.currentMatrix);
               this.renderSchedule(this.currentMatrix, this.currentEmployees, this.currentWeekStart);
               this.renderPDF(this.currentMatrix, this.currentEmployees, this.currentWeekStart);
               Toast.show('Turno actualizado y balance recalculado.', 'info', 2000);

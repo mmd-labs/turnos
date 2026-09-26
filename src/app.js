@@ -124,8 +124,8 @@ export const App = {
 
   _loadSavedState() {
     const names = Storage.loadNames();
-    const isOldGeneric = names && names.every((n, i) => n === `Empleado ${i + 1}`);
-    if (names && names.length > 0 && !isOldGeneric) {
+    const isOldGeneric = Array.isArray(names) && names.every((n, i) => n === `Empleado ${i + 1}`);
+    if (Array.isArray(names) && names.length > 0 && !isOldGeneric) {
       this.state.employeeNames = names;
     } else {
       this.state.employeeNames = [...DEFAULT_EMPLOYEE_NAMES];
@@ -378,6 +378,9 @@ export const App = {
     if (normalized && normalized !== rawWeekStart) {
       Renderer.weekStartInput.value = normalized;
     }
+    if (!Renderer.weekStartInput.value) {
+      Renderer.setDefaultWeekStart();
+    }
     this.state.weekStart = Renderer.weekStartInput.value;
     this._saveState();
 
@@ -420,7 +423,7 @@ export const App = {
         return;
       }
 
-      Storage.saveSchedule(result.matrix, currentWeekStr);
+      Storage.saveSchedule(currentWeekStr, result.matrix);
       Storage.saveDemandForWeek(currentWeekStr, weekDemand);
       generatedWeeks.push(currentWeekStr);
       if (w === 0) {
