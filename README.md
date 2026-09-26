@@ -67,23 +67,24 @@ Funciona de forma **híbrida (Offline-First)**: opera al 100% en el navegador co
 
 ## 📋 Reglas del Motor de Planificación
 
-El motor (`Scheduler` en [`src/scheduler.js`](file:///home/d4rkd4y/workspace/turnos/src/scheduler.js)) opera en 4 fases:
+El motor (`Scheduler` en [`src/scheduler.js`](file:///home/d4rkd4y/workspace/turnos/src/scheduler.js)) opera bajo el principio de que **la demanda manda y el patrón rotativo es la preferencia**, estructurado en 4 fases:
 
-1. **Validaciones de Capacidad**:
-   - **Capacidad Total**: La demanda total de la semana no puede superar la capacidad máxima disponible ($\text{Empleados} \times 5$ días laborables).
-   - **Capacidad Diaria**: En ningún día la demanda $(\text{Mañana} + \text{Tarde})$ puede superar la plantilla total de empleados.
+1. **Validaciones de Capacidad y Factibilidad**:
+   - **Capacidad Total Exacta**: La demanda total de la semana debe ser exactamente igual a la capacidad de la plantilla ($\text{Empleados} \times 5$ días laborables).
+   - **Capacidad Diaria y Mínimos**: Ningún día puede superar la plantilla total $N$, exigiendo un mínimo de 2 empleados por turno (Lunes a Jueves) y 3 empleados por turno (Viernes a Domingo).
    - **Capacidad de Mañanas**: La demanda total de mañanas debe ser suficiente para cubrir las 5 mañanas del Empleado 1 y al menos 1 mañana para cada uno de los restantes $N - 1$ empleados ($\text{Demanda Mañanas} \ge N + 4$).
-2. **Fase 1 y 2 (Asignación de Descansos por Patrón Rotativo)**:
-   - Determina la semana efectiva del ciclo (Semana 1 a 7) para cada empleado a partir de la fecha seleccionada en el calendario y su configuración de inicio.
-   - Asigna los 2 días libres continuos (`L`) correspondientes a cada trabajador.
-   - Para el Empleado 1 (Mar), asigna exclusivamente turno de Mañana (`M`) en sus 5 días laborables restantes.
+   - **Factibilidad por Descomposición en Pares Consecutivos**: A partir de los descansos necesarios cada día ($off[d] = N - (\text{Mañana}_d + \text{Tarde}_d)$), el motor resuelve el sistema circular de 7 ecuaciones $c[k-1] + c[k] = off[k]$ (mód 7). Si algún $c[k]$ resulta no entero o negativo, la demanda diaria se rechaza limpiamente con indicación del día con conflicto.
+2. **Fase 1 y 2 (Asignación de Descansos por Preferencia)**:
+   - Determina el par rotativo preferido según el avance cíclico semanal (+1 estricto, módulo 7).
+   - **Asignación por preferencia**: Se asigna primero el par rotativo correspondiente a cada empleado si hay cuota $c[k] > 0$ disponible.
+   - **Desviación mínima**: Si la demanda restringe las cuotas de su par, se le asigna el par alternativo disponible con la mínima distancia circular. El auditor marcará el estado como "Modificado" (badge ámbar).
+   - Todos los empleados reciben estrictamente 2 días libres continuos (`L`).
+   - Para el Empleado 1 (Mar / Clave), se asigna turno de Mañana (`M`) en sus 5 días laborables restantes.
 3. **Fase 3 (Asignación de Turnos Mañana/Tarde y Mínimo Garantizado)**:
-   - Contabiliza con precisión los turnos de mañana ya cubiertos por el empleado clave.
-   - Asigna los turnos restantes (`M` y `T`) priorizando a quienes aún no tienen turno de mañana y balanceando la carga acumulada.
-   - Aplica un paso de garantía estricta para asegurar que **todos los empleados tengan al menos 1 turno de mañana**.
+   - Asigna los turnos restantes (`M` y `T`) respetando los objetivos de rotación semanal y balanceando la carga.
+   - Aplica un paso de reparación estricta para asegurar que **todos los empleados tengan al menos 1 turno de mañana**.
 4. **Fase 4 (Optimización Ergonómica)**:
-   - Detecta transiciones perjudiciales `T -> M` entre días consecutivos.
-   - Ejecuta intercambios entre trabajadores en el mismo día preservando invariantes: la demanda diaria se mantiene exacta, cada trabajador mantiene sus días libres intactos y nadie pierde su turno de mañana mínimo.
+   - Detecta transiciones `T -> M` entre días consecutivos y ejecuta intercambios bidireccionales globales entre trabajadores sin alterar días libres ni la demanda diaria.
 
 ---
 
@@ -98,14 +99,14 @@ El código está organizado de manera modular en módulos ES6 estándar:
 ├── manifest.json               # Configuración PWA (iconos, colores, modo standalone)
 ├── sw.js                       # Service Worker para caché y funcionamiento offline
 ├── netlify.toml                # Configuración de despliegue en Netlify, headers y caché
-├── package.json                # Configuración de dependencias y scripts de prueba
+├── package.json                # Configuración de scripts de prueba (sin dependencias de runtime)
 ├── icon-192.png / icon-512.png # Iconos para PWA
 ├── icon.svg                    # Icono vectorial principal
 │
 ├── src/                        # Código fuente modular (ES6 Modules)
-│   ├── app.js                  # Orquestador principal, flujo de inicio y eventos
-│   ├── scheduler.js            # Motor heurístico de asignación de turnos (4 fases)
-│   ├── renderer.js             # Renderizado del cuadrante, matriz de demanda y controles
+│   ├── app.js                  # Orquestador principal, generación multi-semana atómica y eventos
+│   ├── scheduler.js            # Motor heurístico con descomposición en pares y preferencia rotativa
+│   ├── renderer.js             # Renderizado del cuadrante, ciclo mod7 y controles
 │   ├── auditor.js              # Validación en vivo de balances e invariantes
 │   ├── exporter.js             # Exportación a PDF, Excel (CSV) y formato WhatsApp
 │   ├── individual.js           # Vista y tarjetas de horario individual por empleado
@@ -115,12 +116,12 @@ El código está organizado de manera modular en módulos ES6 estándar:
 │   ├── theme.js                # Control de tema (modo oscuro/claro)
 │   ├── toast.js                # Notificaciones toast flotantes
 │   ├── help.js                 # Modal de ayuda interactiva y explicación de reglas
-│   └── constants.js            # Constantes de negocio, patrones de rotación y valores por defecto
+│   └── constants.js            # Constantes de negocio y patrones rotativos
 │
 ├── supabase/                   # Configuración y migraciones de Supabase
 │   ├── config.toml             # Configuración del entorno Supabase CLI
 │   └── migrations/
-│       └── 20260925000000_init_schema.sql  # Esquema de tablas (user_config, weekly_schedules) y RLS
+│       └── 20260925000000_init_schema.sql  # Esquema de tablas con RLS y WITH CHECK
 │
 └── tests/                      # Suite de pruebas automatizadas
     └── scheduler.test.js       # Pruebas unitarias para el motor de planificación
@@ -137,10 +138,13 @@ npm test
 ```
 
 Las pruebas cubren:
-- Rechazo de demandas infactibles y control de sobrecapacidad.
-- Validación de turnos del empleado clave (5 Mañanas / 0 Tardes).
-- Mínimo de 1 turno de mañana por empleado.
-- Días libres continuos y dotaciones requeridas.
+- **Rechazo de demandas infactibles**: Sobredemanda o dotaciones por debajo del mínimo legal.
+- **Happy path e invariantes**: 5 turnos por empleado, al menos 1 M para todos, 5M para el empleado clave y cobertura diaria exacta coincidiendo con la demanda.
+- **Patrón personalizado con demanda estándar**: Asignación exitosa respetando exactamente 2 libres consecutivos por empleado.
+- **Rotación multi-semana**: Simulación de 7 semanas consecutivas (+k mód 7) con cobertura exacta.
+- **Infactibilidad por pares rotativos**: Detección y rechazo limpio cuando la demanda diaria arroja cuotas negativas ($c[k] < 0$).
+- **Control estricto de capacidad**: Rechazo si la demanda semanal no iguala exactamente $N \times 5$.
+- **Límite de desviaciones**: Garantía de que $\le 2$ empleados se desvíen de su patrón preferido en condiciones estándar.
 
 ---
 

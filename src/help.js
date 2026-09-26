@@ -34,5 +34,3 @@ export const HelpModal = {
     if (this.modal) this.modal.hidden = true;
   }
 };
-
-   APP INITIALIZATION
