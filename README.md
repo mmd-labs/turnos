@@ -2,7 +2,7 @@
 
 Aplicación web progresiva (**PWA**) para la **planificación, generación automática, sincronización y exportación de cuadrantes de turnos laborales semanales**. Diseñada para comercios, hostelería, pastelerías o pymes que operan con turnos de Mañana y Tarde.
 
-Funciona de forma **híbrida (Offline-First)**: opera al 100% en el navegador con `localStorage` y soporte sin conexión mediante Service Worker, y ofrece **sincronización multi-dispositivo y autenticación en la nube** a través de **Supabase**.
+Funciona al **100% en el navegador de forma local (Offline-First)**: opera con `localStorage` y soporte completo sin conexión mediante Service Worker, garantizando total privacidad y funcionamiento sin servidores externos.
 
 Desarrollada bajo **Clean Architecture (Feature-First) + Principios SOLID**, 100% **bundler-less** (módulos nativos ES6 del navegador con contratos JSDoc y verificación estática con TypeScript) y con una completa suite de pruebas automatizadas como gate de despliegue.
 
@@ -60,10 +60,9 @@ Desarrollada bajo **Clean Architecture (Feature-First) + Principios SOLID**, 100
   - **PDF Profesional**: A4 apaisado (*landscape*) listo para imprimir generado vía `html2pdf.js`.
   - **Excel / CSV**: Exportación con codificación UTF-8 BOM compatible con Microsoft Excel y Google Sheets.
   - **Compartir por WhatsApp**: Formateador de texto estructurado con emojis listo para copiar al portapapeles o enviar por mensajería.
-- **Nube y Sincronización (Supabase)**:
-  - Autenticación de usuario desacoplada mediante `AuthPort`.
-  - Sincronización automática de configuraciones (`user_config`) y cuadrantes generados (`weekly_schedules`) vía `SyncPort` y `PersistenceNotifier`.
-  - Seguridad a nivel de fila mediante Row Level Security (RLS).
+- **Persistencia Local y Privacidad Total**:
+  - Almacenamiento versionado y seguro en `localStorage` mediante `LocalStorageStore`.
+  - Funcionamiento autónomo e instantáneo sin registros ni cuentas de usuario.
 
 ---
 
@@ -92,13 +91,13 @@ El proyecto está diseñado bajo una arquitectura limpia por funcionalidades (**
                             │ implements ports
 ┌───────────────────────────┴────────────────────────────┐
 │                    INFRASTRUCTURE                      │
-│ (LocalStorage, Repositories, Adapters: Supabase/Share) │
+│ (LocalStorage, Repositories, Adapters: Export/Share)   │
 └────────────────────────────────────────────────────────┘
 ```
 
 1. **Domain (Núcleo)**: Funciones y entidades 100% puras sin dependencias de I/O ni DOM (`rules/demand.js`, `patterns.js`, `scheduler.js`, `audit-schedule.js`, `csv-builder.js`, `share-text.js`). Testeables instantáneamente en Node.js.
 2. **Application (Casos de Uso & Puertos)**: Coordinación de flujos de negocio (`generate-schedules.usecase.js`) e interfaces abstractas mediante JSDoc `@typedef` (`ports.js`).
-3. **Infrastructure (Adaptadores)**: Implementación de contratos de persistencia, red y utilidades externas (`local-schedule.repository.js`, `supabase-auth.adapter.js`, `supabase-sync.adapter.js`, `dom-download.adapter.js`, `navigator-share.adapter.js`).
+3. **Infrastructure (Adaptadores)**: Implementación de contratos de persistencia y utilidades externas (`local-schedule.repository.js`, `local-settings.repository.js`, `dom-download.adapter.js`, `navigator-share.adapter.js`, `html2pdf.adapter.js`).
 4. **Presentation (Vistas y Controladores)**: Componentes desacoplados orientados a la UI (`schedule-view.js`, `employee-names-view.js`, `demand-view.js`, `week-nav-view.js`) y controladores específicos.
 5. **Composition Root (`src/main.js`)**: Punto de entrada único que instancia los adaptadores, repositorios, vistas y controladores conectándolos sin que la UI contenga lógica de negocio.
 
@@ -144,15 +143,6 @@ El proyecto está diseñado bajo una arquitectura limpia por funcionalidades (**
 │   │   │   ├── infrastructure/          # LocalSettingsRepository
 │   │   │   └── presentation/            # EmployeeNamesView, DemandView, WeekNavView, SettingsController
 │   │   │
-│   │   ├── auth/                        # Feature de autenticación
-│   │   │   ├── application/ports.js     # AuthPort
-│   │   │   ├── infrastructure/          # SupabaseAuthAdapter y configuración
-│   │   │   └── presentation/            # AuthController
-│   │   │
-│   │   ├── sync/                        # Feature de sincronización en la nube
-│   │   │   ├── application/ports.js     # SyncPort
-│   │   │   └── infrastructure/          # SupabaseSyncAdapter y NullSyncAdapter (offline)
-│   │   │
 │   │   ├── export/                      # Feature de exportación
 │   │   │   ├── domain/                  # csv-builder y share-text puros
 │   │   │   └── infrastructure/          # Adaptadores: DOM download, Web Share, html2pdf
@@ -171,7 +161,7 @@ El proyecto está diseñado bajo una arquitectura limpia por funcionalidades (**
     ├── audit.test.js                    # Motor de auditoría y cálculo de balance
     ├── store.test.js                    # Almacenes de clave-valor y aislamiento
     ├── repositories.test.js             # Repositorios de persistencia
-    ├── auth-sync.test.js                # Adaptadores de Auth, Sync y NavigationService
+    ├── navigation.test.js               # Servicio desacoplado de navegación (pub/sub)
     ├── presentation.test.js             # Vistas de presentación y fachadas
     ├── csv-builder.test.js              # Generación de archivos CSV con BOM UTF-8
     ├── share-text.test.js               # Formateador de horarios para WhatsApp
@@ -185,7 +175,7 @@ El proyecto está diseñado bajo una arquitectura limpia por funcionalidades (**
 La suite de pruebas se ejecuta directamente con el *test runner* nativo de **Node.js** (sin dependencias de empaquetado):
 
 ```bash
-# Ejecutar suite de pruebas unitarias y de integración (48 tests)
+# Ejecutar suite de pruebas unitarias y de integración (50 tests)
 npm test
 
 # Ejecutar verificación estática de tipos con TypeScript (JSDoc)
@@ -196,19 +186,18 @@ npm run check
 
 ## 📖 Instrucciones de Uso
 
-1. **Inicio de Sesión (Opcional)**: Inicia sesión con tus credenciales para sincronizar tus cuadrantes en la nube entre múltiples dispositivos, o continúa en modo local sin registro.
-2. **Semana de Trabajo**: Selecciona la fecha del lunes de la semana que deseas planificar y el horizonte (1 a 12 semanas).
-3. **Plantilla de Empleados**:
+1. **Semana de Trabajo**: Selecciona la fecha del lunes de la semana que deseas planificar y el horizonte (1 a 12 semanas).
+2. **Plantilla de Empleados**:
    - Ajusta el número de empleados (mínimo 8).
    - Edita los nombres en las tarjetas. El primer empleado actuará como empleado clave en turno de mañana.
    - Configura la semana inicial del ciclo rotativo para cada trabajador si difiere del estándar.
-4. **Matriz de Demanda**:
+3. **Matriz de Demanda**:
    - Especifica el personal requerido cada día para el turno de **Mañana** y de **Tarde**.
    - Usa el botón `📋 Copiar a todas las semanas` si la demanda es constante.
-5. **Generar y Ajustar**:
+4. **Generar y Ajustar**:
    - Pulsa **"Generar Cuadrante"**. Si la demanda es factible, se creará el cuadrante semanal.
    - Puedes realizar ajustes manuales en los desplegables (`M`, `T`, `L`); el auditor validará los cambios en tiempo real.
-6. **Exportar y Compartir**:
+5. **Exportar y Compartir**:
    - **PDF**: Cuadrante maquetado en A4 horizontal.
    - **Excel (CSV)**: Tabla detallada con desglose de horas por trabajador.
    - **WhatsApp**: Copia un resumen estructurado para enviar al equipo.

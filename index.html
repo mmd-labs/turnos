@@ -15,25 +15,7 @@
   <script type="module" src="src/main.js"></script>
 </head>
 <body>
-  <!-- AUTH CONTAINER -->
-  <dialog id="auth-container" class="auth-dialog">
-    <div class="auth-content">
-      <h2 style="margin-top: 0;">Inicia Sesión</h2>
-      <p style="margin-bottom: 1rem; color: #555;">Accede con tu usuario para cargar tus turnos.</p>
-      
-      <label for="auth-username" class="sr-only">Usuario</label>
-      <input type="text" id="auth-username" placeholder="Usuario (ej. cris.santana)">
-      
-      <label for="auth-password" class="sr-only">Contraseña</label>
-      <input type="password" id="auth-password" placeholder="Contraseña">
-      
-      <button id="btn-login" class="btn btn-primary">Ingresar</button>
-      <button id="btn-login-offline" class="btn btn-secondary" style="margin-top: 10px; width: 100%;">Continuar en modo local (Offline)</button>
-      <p id="auth-error" style="color: red; margin-top: 1rem; display: none;"></p>
-    </div>
-  </dialog>
-
-  <div id="app-wrapper" style="display: none;">
+  <div id="app-wrapper">
   <!-- APP HEADER -->
   <header class="app-header">
     <div class="header-container">
@@ -42,7 +24,6 @@
         <h1 class="brand-title">Gestión de Turnos</h1>
       </div>
       <div class="header-actions">
-        <button type="button" id="btn-logout" class="btn btn-icon" title="Cerrar sesión" style="margin-right: 8px;">🚪</button>
         <button type="button" id="help-toggle" class="btn btn-icon btn-help" title="Manual de ayuda y guía de uso" aria-label="Ayuda y manual de uso">
           <span class="help-btn-symbol">?</span>
         </button>

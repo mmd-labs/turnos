@@ -8,14 +8,10 @@ import { Theme } from './theme.js';
 import { Toast } from './toast.js';
 import { HelpModal } from './help.js';
 import { IndividualView } from './individual.js';
-import { persistenceNotifier } from './core/infrastructure/persistence-notifier.js';
 import { navigationService } from './core/infrastructure/navigation.service.js';
 import { LocalStorageStore } from './core/infrastructure/local-storage.store.js';
 import { LocalScheduleRepository } from './features/scheduling/infrastructure/local-schedule.repository.js';
 import { LocalSettingsRepository } from './features/settings/infrastructure/local-settings.repository.js';
-import { SupabaseAuthAdapter } from './features/auth/infrastructure/supabase-auth.adapter.js';
-import { SupabaseSyncAdapter } from './features/sync/infrastructure/supabase-sync.adapter.js';
-import { AuthController } from './features/auth/presentation/auth.controller.js';
 import { GenerateSchedulesUseCase } from './features/scheduling/application/generate-schedules.usecase.js';
 import { scheduleView } from './features/scheduling/presentation/schedule-view.js';
 import { employeeNamesView } from './features/settings/presentation/employee-names-view.js';
@@ -31,8 +27,6 @@ class Application {
     this.store = new LocalStorageStore();
     this.scheduleRepo = new LocalScheduleRepository({ store: this.store });
     this.settingsRepo = new LocalSettingsRepository({ store: this.store });
-    this.authPort = new SupabaseAuthAdapter();
-    this.syncPort = new SupabaseSyncAdapter({ store: this.store });
 
     // 2. Application Use Cases
     this.generateSchedulesUseCase = new GenerateSchedulesUseCase({
@@ -71,13 +65,6 @@ class Application {
       generateSchedulesUseCase: this.generateSchedulesUseCase,
       individualCtrl: this.individualController,
     });
-
-    this.authController = new AuthController({
-      authPort: this.authPort,
-      syncPort: this.syncPort,
-      onLoginSuccess: () => this.settingsController.enterApp(),
-      onLogout: () => {},
-    });
   }
 
   get state() {
@@ -85,27 +72,24 @@ class Application {
   }
 
   async init() {
-    // 1. Reactive Persistence & Navigation Infrastructure
-    persistenceNotifier.subscribe(() => this.syncPort.onLocalChange());
+    // 1. Navigation Infrastructure
     navigationService.onNavigate((weekStr) => this.navigateToWeek(weekStr));
 
-    // 2. Authentication
-    this.authController.init();
-
-    // 3. UI Components & Shell
+    // 2. UI Components & Shell
     Toast.init();
     Theme.init();
     IndividualView.init();
     HelpModal.init();
 
-    // 4. Feature Controllers
+    // 3. Feature Controllers
     this.settingsController.init();
+    this.settingsController.enterApp();
     this.scheduleController.init();
 
-    // 5. PWA Service Worker
+    // 4. PWA Service Worker
     this._registerServiceWorker();
 
-    // 6. Restore active schedule on startup if present
+    // 5. Restore active schedule on startup if present
     this._restoreInitialSchedule();
   }
 

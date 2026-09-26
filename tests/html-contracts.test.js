@@ -20,14 +20,6 @@ test('Contrato HTML: Presencia de IDs críticos requeridos por los controladores
   }
 
   const expectedIds = [
-    // Auth
-    'auth-container',
-    'auth-username',
-    'auth-password',
-    'btn-login',
-    'btn-login-offline',
-    'auth-error',
-    'btn-logout',
     // App shell
     'app-wrapper',
     'help-toggle',
