@@ -411,8 +411,9 @@ export const App = {
 
     const generatedWeeks = [];
     let firstWeekMatrix = null;
+    const weekPlans = [];
 
-    // Generate schedules for all selected weeks
+    // Pass 1: Dry run (calculate and validate all weeks in memory)
     for (let w = 0; w < weeksCount; w++) {
       const monday = Renderer.getMonday(startWeek);
       monday.setDate(monday.getDate() + (w * 7));
@@ -432,11 +433,21 @@ export const App = {
         return;
       }
 
-      Storage.saveSchedule(currentWeekStr, result.matrix);
-      Storage.saveDemandForWeek(currentWeekStr, weekDemand);
-      generatedWeeks.push(currentWeekStr);
+      weekPlans.push({
+        weekStr: currentWeekStr,
+        matrix: result.matrix,
+        demand: weekDemand
+      });
+    }
+
+    // Pass 2: Commit (save only after all weeks have succeeded)
+    for (let w = 0; w < weekPlans.length; w++) {
+      const plan = weekPlans[w];
+      Storage.saveSchedule(plan.weekStr, plan.matrix);
+      Storage.saveDemandForWeek(plan.weekStr, plan.demand);
+      generatedWeeks.push(plan.weekStr);
       if (w === 0) {
-        firstWeekMatrix = result.matrix;
+        firstWeekMatrix = plan.matrix;
       }
     }
 
