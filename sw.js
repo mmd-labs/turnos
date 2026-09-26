@@ -53,11 +53,13 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     fetch(event.request)
       .then((networkResponse) => {
-        // Cache successful GET responses
-        if (networkResponse && networkResponse.status === 200) {
+        // Cache successful GET responses for http/https only
+        if (networkResponse && networkResponse.status === 200 && event.request.url.startsWith('http')) {
           const responseToCache = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseToCache);
+            cache.put(event.request, responseToCache).catch(err => {
+              console.warn('Cache put failed:', err);
+            });
           });
         }
         return networkResponse;
