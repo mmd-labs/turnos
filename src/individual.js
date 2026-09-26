@@ -1,5 +1,6 @@
 import { Renderer } from './renderer.js';
 import { ROTATING_OFF_PATTERN } from './constants.js';
+import { Toast } from './toast.js';
 export const IndividualView = {
   init() {
     this.modal = document.getElementById('individual-modal');

@@ -1,5 +1,5 @@
 import * as constants from "./constants.js";
-const { DAYS, DAYS_OFF_PER_EMPLOYEE, MIN_EMPLOYEES, ROTATING_OFF_PATTERN } = constants;
+const { DAYS, DAYS_FULL, DAYS_OFF_PER_EMPLOYEE, MIN_EMPLOYEES, ROTATING_OFF_PATTERN, DEFAULT_EMPLOYEE_PATTERNS } = constants;
 export const Scheduler = {
   /**
    * Generate a schedule matrix.

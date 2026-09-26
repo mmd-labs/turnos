@@ -1,4 +1,4 @@
-const CACHE_NAME = 'turnos-app-v4';
+const CACHE_NAME = 'turnos-app-v5';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -13,6 +13,9 @@ const ASSETS_TO_CACHE = [
   './src/individual.js',
   './src/help.js',
   './src/app.js',
+  './src/auditor.js',
+  './src/sync.js',
+  './src/supabase.js',
   './icon.svg',
   './icon-192.png',
   './icon-512.png',

@@ -1,4 +1,5 @@
 import { supabase } from './supabase.js';
+import { STORAGE_KEYS } from './constants.js';
 
 export const SyncManager = {
   _timeout: null,
@@ -32,6 +33,7 @@ export const SyncManager = {
 
       if (!schedulesError && schedulesData) {
         for (const row of schedulesData) {
+          // row.week_start already includes the prefix (e.g., turnos_schedule_YYYY-MM-DD)
           localStorage.setItem(row.week_start, JSON.stringify(row.data_json));
         }
       }
@@ -48,25 +50,24 @@ export const SyncManager = {
     if (!user) return;
 
     try {
-      // Recopilar configuraciones generales (claves que no son semanas específicas)
       const configJson = {};
       const schedules = [];
 
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
-        if (!key) continue;
+        if (!key || !key.startsWith('turnos_')) continue;
         
         try {
           const raw = localStorage.getItem(key);
           const parsed = JSON.parse(raw);
           
-          if (key.startsWith('schedule_') || key.startsWith('demand_')) {
+          if (key.startsWith(STORAGE_KEYS.SCHEDULE_WEEK_PREFIX) || key.startsWith(STORAGE_KEYS.DEMAND_WEEK_PREFIX)) {
             schedules.push({ week_start: key, data_json: parsed });
           } else {
             configJson[key] = parsed;
           }
         } catch (e) {
-          // Ignorar keys que no son JSON nuestro (ej: toolbars)
+          // Ignorar keys que no son JSON válido
         }
       }
 
@@ -79,7 +80,6 @@ export const SyncManager = {
 
       // 2. Push schedules (upsert)
       if (schedules.length > 0) {
-        // Añadir el user_id a todas las filas
         const rows = schedules.map(s => ({
           user_id: user.id,
           week_start: s.week_start,

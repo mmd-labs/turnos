@@ -289,7 +289,7 @@ export const App = {
       const editedMatrix = Renderer.getScheduleFromDOM();
       const names = Renderer.getEmployeeNames();
       const weekStart = Renderer.weekStartInput.value;
-      Storage.saveSchedule(editedMatrix, weekStart);
+      Storage.saveSchedule(weekStart, editedMatrix);
       Storage.saveNames(names);
       Renderer.showConfig();
     });
@@ -451,13 +451,3 @@ export const App = {
 // Expose App globally and start on DOMContentLoaded
 window.App = App;
 document.addEventListener('DOMContentLoaded', () => App.init());
-
-// Init
-document.addEventListener('DOMContentLoaded', () => {
-  Toast.init();
-  Theme.init();
-  Renderer.init();
-  IndividualView.init();
-  HelpModal.init();
-  App.init();
-});

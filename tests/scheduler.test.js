@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert';
-import * as constants from '../src/constants.js';
-Object.assign(globalThis, constants); // inject constants for the test environment since scheduler might use them globally if not imported properly, wait, I just injected them in scheduler.js! So no need.
+
 import { Scheduler } from '../src/scheduler.js';
 
 test('Rechazo: demandas infactibles', () => {
