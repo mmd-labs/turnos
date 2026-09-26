@@ -9,6 +9,8 @@ import { Toast } from './toast.js';
 import { supabase } from './supabase.js';
 import { SyncManager } from './sync.js';
 import { DEFAULT_EMPLOYEES, DEFAULT_EMPLOYEE_NAMES, MIN_EMPLOYEES } from './constants.js';
+import { clampDemandValue, getMinStaffForDay } from './features/scheduling/domain/rules/demand.js';
+
 
 export const App = {
   state: {
@@ -222,12 +224,14 @@ export const App = {
       input.addEventListener('change', () => {
         const day = parseInt(input.dataset.day);
         let val = parseInt(input.value) || 0;
-        if (day >= 4 && val < 3) {
-          input.value = 3;
-          Toast.show('Viernes, sábados y domingos siempre deben tener al menos 3 empleados por cada turno.', 'warning', 3500);
-        } else if (val < 2) {
-          input.value = 2;
-          Toast.show('El personal mínimo por turno es de 2 empleados.', 'warning', 3500);
+        const clamped = clampDemandValue(day, val);
+        if (clamped !== val) {
+          input.value = clamped;
+          if (day >= 4) {
+            Toast.show('Viernes, sábados y domingos siempre deben tener al menos 3 empleados por cada turno.', 'warning', 3500);
+          } else {
+            Toast.show('El personal mínimo por turno es de 2 empleados.', 'warning', 3500);
+          }
         }
         const activeWeekStr = Renderer.getActiveDemandWeekStr();
         if (activeWeekStr) {

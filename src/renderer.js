@@ -22,6 +22,15 @@ import {
   getNextMonday,
 } from './core/date.js';
 import { escapeHtml } from './core/html.js';
+import { clampDemandValue } from './features/scheduling/domain/rules/demand.js';
+import {
+  getEffectivePatternWeek,
+  getEffectivePatternWeeks,
+  getEffectiveShiftTargets,
+  calculateEffectiveShiftMode,
+  calculateBasePattern,
+} from './features/scheduling/domain/patterns.js';
+
 
 export const Renderer = {
   init() {
@@ -56,21 +65,14 @@ export const Renderer = {
   getEffectivePatternWeek(empIndex, weekStartStr) {
     const baseWeek = Storage.loadBaseWeek() || (this.weekStartInput ? this.weekStartInput.value : '');
     const savedPatterns = Storage.loadPatterns();
-    const basePattern = (savedPatterns && savedPatterns[empIndex] !== undefined)
-      ? savedPatterns[empIndex]
-      : (DEFAULT_EMPLOYEE_PATTERNS[empIndex] ?? ((empIndex % 7) + 1));
-    if (!baseWeek || !weekStartStr) return basePattern;
-    const diffWeeks = this._getWeeksDiff(baseWeek, weekStartStr);
-    return (((basePattern - 1 + diffWeeks) % 7) + 7) % 7 + 1;
+    return getEffectivePatternWeek({ empIndex, baseWeek, targetWeek: weekStartStr, savedPatterns });
   },
 
   getEffectivePatternWeeks(weekStartStr) {
     const count = parseInt(this.employeeCountInput ? this.employeeCountInput.value : DEFAULT_EMPLOYEES) || DEFAULT_EMPLOYEES;
-    const weeks = [];
-    for (let i = 0; i < count; i++) {
-      weeks.push(this.getEffectivePatternWeek(i, weekStartStr));
-    }
-    return weeks;
+    const baseWeek = Storage.loadBaseWeek() || (this.weekStartInput ? this.weekStartInput.value : '');
+    const savedPatterns = Storage.loadPatterns();
+    return getEffectivePatternWeeks({ count, baseWeek, targetWeek: weekStartStr, savedPatterns });
   },
 
   setEmployeePatternForWeek(empIndex, effectiveWeek, weekStartStr) {
@@ -83,41 +85,24 @@ export const Renderer = {
       currentPatterns.push(((currentPatterns.length % 7) + 1));
     }
     const diffWeeks = this._getWeeksDiff(baseWeek, weekStartStr);
-    const newBasePattern = (((effectiveWeek - 1 - diffWeeks) % 7) + 7) % 7 + 1;
+    const newBasePattern = calculateBasePattern(effectiveWeek, diffWeeks);
     currentPatterns[empIndex] = newBasePattern;
     Storage.savePatterns(currentPatterns);
   },
 
   getEffectiveShiftMode(empIndex, weekStartStr) {
-    if (empIndex === 0) return '5M0T';
     const baseWeek = Storage.loadBaseWeek() || (this.weekStartInput ? this.weekStartInput.value : '');
-    let baseMode = DEFAULT_EMPLOYEE_SHIFT_MODES[empIndex] || ((empIndex % 2 === 1) ? '3M2T' : '2M3T');
-    if (baseMode === '5M0T' && empIndex > 0) {
-      baseMode = (empIndex % 2 === 1) ? '3M2T' : '2M3T';
-    }
-    if (!baseWeek || !weekStartStr) return baseMode;
-    const diffWeeks = this._getWeeksDiff(baseWeek, weekStartStr);
-    if (Math.abs(diffWeeks) % 2 === 0) {
-      return baseMode;
-    } else {
-      return baseMode === '3M2T' ? '2M3T' : '3M2T';
-    }
+    const savedShiftModes = Storage.loadConfig()?.shiftModes;
+    const baseMode = (savedShiftModes && savedShiftModes[empIndex]) || DEFAULT_EMPLOYEE_SHIFT_MODES[empIndex];
+    const diffWeeks = (baseWeek && weekStartStr) ? this._getWeeksDiff(baseWeek, weekStartStr) : 0;
+    return calculateEffectiveShiftMode(empIndex, baseMode, diffWeeks);
   },
 
   getEffectiveShiftTargets(weekStartStr) {
     const count = parseInt(this.employeeCountInput ? this.employeeCountInput.value : DEFAULT_EMPLOYEES) || DEFAULT_EMPLOYEES;
-    const targets = [];
-    for (let i = 0; i < count; i++) {
-      const mode = this.getEffectiveShiftMode(i, weekStartStr);
-      if (mode === '5M0T') {
-        targets.push({ m: 5, t: 0, mode });
-      } else if (mode === '3M2T') {
-        targets.push({ m: 3, t: 2, mode });
-      } else {
-        targets.push({ m: 2, t: 3, mode });
-      }
-    }
-    return targets;
+    const baseWeek = Storage.loadBaseWeek() || (this.weekStartInput ? this.weekStartInput.value : '');
+    const savedShiftModes = Storage.loadConfig()?.shiftModes;
+    return getEffectiveShiftTargets({ count, baseWeek, targetWeek: weekStartStr, savedShiftModes });
   },
 
   renderGeneratedWeeksNav(weeks, currentWeek) {
@@ -253,9 +238,7 @@ export const Renderer = {
       const day = parseInt(input.dataset.day);
       if (demand[shift] && demand[shift][day] !== undefined) {
         let val = demand[shift][day];
-        if (day >= 4 && val < 3) val = 3;
-        else if (val < 2) val = 2;
-        input.value = val;
+        input.value = clampDemandValue(day, val);
       }
     });
   },

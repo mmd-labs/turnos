@@ -1,3 +1,4 @@
+import { validateDemand } from './features/scheduling/domain/rules/demand.js';
 import * as constants from "./constants.js";
 const { DAYS, DAYS_FULL, DAYS_OFF_PER_EMPLOYEE, MIN_EMPLOYEES, ROTATING_OFF_PATTERN, DEFAULT_EMPLOYEE_PATTERNS } = constants;
 export const Scheduler = {
@@ -8,69 +9,13 @@ export const Scheduler = {
    */
   generate(employees, demand, options = {}) {
     const n = employees.length;
-    if (n < MIN_EMPLOYEES) {
-      return { success: false, error: `Se necesitan al menos ${MIN_EMPLOYEES} empleados.` };
+    const validation = validateDemand(demand, n);
+    if (!validation.valid) {
+      return { success: false, error: validation.error };
     }
 
-    // Build demand arrays: demandM[day], demandT[day]
-    const demandM = [];
-    const demandT = [];
-    let totalDemand = 0;
-    let totalDemandM = 0;
-    for (let d = 0; d < 7; d++) {
-      demandM[d] = demand.morning[d] || 0;
-      demandT[d] = demand.afternoon[d] || 0;
-      totalDemand += demandM[d] + demandT[d];
-      totalDemandM += demandM[d];
-    }
-
-    // Minimum staffing checks:
-    // Rule: minimum 2 per shift on any day. Never less than 2 per shift.
-    // Rule: Friday, Saturday, Sunday ALWAYS have at least 3 employees per shift.
-    for (let d = 0; d < 7; d++) {
-      if (demandM[d] < 2 || demandT[d] < 2) {
-        return {
-          success: false,
-          error: `El personal mínimo por turno es de 2 empleados. Revisa los turnos del ${DAYS_FULL[d]} (Mañana: ${demandM[d]}, Tarde: ${demandT[d]}). Nunca puede haber menos de dos por turno.`,
-        };
-      }
-      if (d >= 4 && (demandM[d] < 3 || demandT[d] < 3)) {
-        return {
-          success: false,
-          error: `Los viernes, sábados y domingos siempre deben tener al menos 3 empleados por cada turno. Revisa el ${DAYS_FULL[d]} (Mañana: ${demandM[d]}, Tarde: ${demandT[d]}).`,
-        };
-      }
-    }
-
-    // Daily capacity check
-    for (let d = 0; d < 7; d++) {
-      if (demandM[d] + demandT[d] > n) {
-        return {
-          success: false,
-          error: `La demanda del ${DAYS_FULL[d]} (${demandM[d] + demandT[d]} turnos) supera la cantidad total de empleados (${n}).`,
-        };
-      }
-    }
-
-    // Total capacity: each employee works (7 - DAYS_OFF_PER_EMPLOYEE) days
-    const workDaysPerEmployee = 7 - DAYS_OFF_PER_EMPLOYEE;
-    const totalCapacity = n * workDaysPerEmployee;
-
-    if (totalDemand !== totalCapacity) {
-      return {
-        success: false,
-        error: `La demanda total (${totalDemand} turnos) debe ser exactamente igual a la capacidad de la plantilla (${totalCapacity} turnos).`,
-      };
-    }
-
-    // Morning capacity check: Emp 1 needs 5 morning shifts, and each of the other n-1 employees needs at least 1 morning shift
-    const minMorningsRequired = 5 + (n - 1);
-    if (totalDemandM < minMorningsRequired) {
-      return {
-        success: false,
-        error: `La demanda total de mañanas (${totalDemandM} turnos) es insuficiente. Se requieren al menos ${minMorningsRequired} turnos de mañana para que el Empleado 1 trabaje 5 mañanas y cada uno de los restantes ${n - 1} empleados tenga al menos 1 turno de mañana.`,
-      };
-    }
+    const demandM = demand.morning;
+    const demandT = demand.afternoon;
 
     // Initialize matrix with null (unset)
     const matrix = Array.from({ length: n }, () => Array(7).fill(null));
@@ -81,11 +26,10 @@ export const Scheduler = {
       ? options.patternWeeks
       : Array.from({ length: n }, (_, i) => DEFAULT_EMPLOYEE_PATTERNS[i] || ((i % 7) + 1));
 
-    // ---- FEASIBILITY CHECK VIA CONSECUTIVE PAIR DECOMPOSITION ----
     // off[d] = how many employees must take off on day d
     const off = [];
     for (let d = 0; d < 7; d++) {
-      off[d] = n - (demandM[d] + demandT[d]);
+      off[d] = n - ((demand.morning[d] || 0) + (demand.afternoon[d] || 0));
     }
 
     // Solve circular system: c[k-1] + c[k] = off[k] (indices mod 7)
@@ -94,14 +38,6 @@ export const Scheduler = {
     c[0] = (off[0] + off[1] - off[2] + off[3] - off[4] + off[5] - off[6]) / 2;
     for (let k = 1; k < 7; k++) {
       c[k] = off[k] - c[k - 1];
-    }
-
-    const invalidDayIndex = c.findIndex(val => !Number.isInteger(val) || val < 0);
-    if (invalidDayIndex !== -1) {
-      return {
-        success: false,
-        error: `La distribución de la demanda no puede cubrirse con pares de 2 días libres consecutivos (par con inicio en ${DAYS_FULL[invalidDayIndex]} inválido). Ajusta los totales diarios.`,
-      };
     }
 
     // ---- PHASE 1 & 2: Assign CONSECUTIVE days off (L) by preference ----
