@@ -111,10 +111,6 @@ export const Exporter = {
   }
 };
 
-/* ============================================
-   MODULE: Auditor & Live Balance
-   ============================================ */
-
 export const ShareHelper = {
   getShareText(matrix, employees, weekStart) {
     if (!matrix || !employees) return '';
@@ -178,6 +174,3 @@ export const ShareHelper = {
   }
 };
 
-/* ============================================
-   MODULE: IndividualView (Modal)
-   ============================================ */

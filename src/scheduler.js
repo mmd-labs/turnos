@@ -56,10 +56,10 @@ export const Scheduler = {
     const workDaysPerEmployee = 7 - DAYS_OFF_PER_EMPLOYEE;
     const totalCapacity = n * workDaysPerEmployee;
 
-    if (totalDemand > totalCapacity) {
+    if (totalDemand !== totalCapacity) {
       return {
         success: false,
-        error: `La demanda total (${totalDemand} turnos) supera la capacidad disponible (${totalCapacity} turnos con ${DAYS_OFF_PER_EMPLOYEE} libres por empleado).`,
+        error: `La demanda total (${totalDemand} turnos) debe ser exactamente igual a la capacidad de la plantilla (${totalCapacity} turnos).`,
       };
     }
 
@@ -92,7 +92,17 @@ export const Scheduler = {
       offCount[d2] += 1;
     }
 
-    // Emp 1 (index 0 - Clave): works strictly Morning on their 5 working days
+    // Exact Daily Capacity & Total Capacity check incorporating offCount
+    for (let d = 0; d < 7; d++) {
+      const workingCount = n - offCount[d];
+      const required = demandM[d] + demandT[d];
+      if (required !== workingCount) {
+        return {
+          success: false,
+          error: `Inviabilidad matemática el ${DAYS_FULL[d]}: hay ${workingCount} empleados disponibles (libran ${offCount[d]}), pero la demanda suma ${required}. Deben coincidir exactamente.`,
+        };
+      }
+    }
     for (let d = 0; d < 7; d++) {
       if (matrix[0][d] === null) {
         matrix[0][d] = 'M';
@@ -247,120 +257,51 @@ export const Scheduler = {
       return v;
     };
 
-    // Emp 1 (index 0) is restricted to morning shifts only; eligible employees are index 1 to n-1
     const eligibleStart = 1;
 
-    for (let pass = 0; pass < 5; pass++) {
+    for (let pass = 0; pass < 20; pass++) {
       let improved = false;
       for (let emp1 = eligibleStart; emp1 < n; emp1++) {
-        for (let d = 0; d < 6; d++) {
-          if (matrix[emp1][d] === 'T' && matrix[emp1][d + 1] === 'M') {
-            // Reciprocal 2-day swap: emp1 (T at d, M at d+1), emp2 (M at d, T at d+1)
-            // Preserves exact mCount and tCount for BOTH employees without altering daily demands!
-            for (let emp2 = eligibleStart; emp2 < n; emp2++) {
-              if (emp1 === emp2) continue;
-              if (matrix[emp2][d] === 'M' && matrix[emp2][d + 1] === 'T') {
-                const before = countViolations(emp1) + countViolations(emp2);
-                matrix[emp1][d] = 'M';
-                matrix[emp1][d + 1] = 'T';
-                matrix[emp2][d] = 'T';
-                matrix[emp2][d + 1] = 'M';
-                const after = countViolations(emp1) + countViolations(emp2);
-
-                if (after < before) {
-                  improved = true;
-                  break;
-                } else {
-                  // Revert swap
-                  matrix[emp1][d] = 'T';
-                  matrix[emp1][d + 1] = 'M';
-                  matrix[emp2][d] = 'M';
-                  matrix[emp2][d + 1] = 'T';
+        for (let d1 = 0; d1 < 7; d1++) {
+          for (let d2 = d1 + 1; d2 < 7; d2++) {
+            if (matrix[emp1][d1] !== matrix[emp1][d2] && matrix[emp1][d1] !== 'L' && matrix[emp1][d2] !== 'L') {
+              for (let emp2 = eligibleStart; emp2 < n; emp2++) {
+                if (emp1 === emp2) continue;
+                if (matrix[emp2][d1] === matrix[emp1][d2] && matrix[emp2][d2] === matrix[emp1][d1]) {
+                  const before = countViolations(emp1) + countViolations(emp2);
+                  
+                  // Swap
+                  const temp1 = matrix[emp1][d1];
+                  matrix[emp1][d1] = matrix[emp1][d2];
+                  matrix[emp1][d2] = temp1;
+                  
+                  const temp2 = matrix[emp2][d1];
+                  matrix[emp2][d1] = matrix[emp2][d2];
+                  matrix[emp2][d2] = temp2;
+                  
+                  const after = countViolations(emp1) + countViolations(emp2);
+                  
+                  if (after < before) {
+                    improved = true;
+                    break;
+                  } else {
+                    // Revert
+                    matrix[emp1][d2] = matrix[emp1][d1];
+                    matrix[emp1][d1] = temp1;
+                    
+                    matrix[emp2][d2] = matrix[emp2][d1];
+                    matrix[emp2][d1] = temp2;
+                  }
                 }
               }
             }
-
             if (improved) break;
           }
           if (improved) break;
         }
-        if (improved) break;
       }
       if (!improved) break;
     }
   },
 
-  _solveConsecutiveOffCounts(numEmpsToAssign, targetOff) {
-    let bestCounts = null;
-    let bestScore = Infinity;
-
-    function score(counts) {
-      let s = 0;
-      for (let d = 0; d < 7; d++) {
-        const actual = counts[d] + counts[(d + 6) % 7];
-        const diff = actual - targetOff[d];
-        if (diff > 0) s += diff * 1000 + diff * diff * 100;
-        else s += Math.abs(diff) * 10;
-      }
-      return s;
-    }
-
-    const counts = Array(7).fill(0);
-
-    function search(idx, currentSum) {
-      if (idx === 6) {
-        counts[6] = numEmpsToAssign - currentSum;
-        const sc = score(counts);
-        if (sc < bestScore) {
-          bestScore = sc;
-          bestCounts = [...counts];
-        }
-        return;
-      }
-
-      const remaining = numEmpsToAssign - currentSum;
-      const maxVal = Math.min(remaining, (targetOff[idx] || 0) + 3);
-      for (let v = 0; v <= maxVal; v++) {
-        counts[idx] = v;
-        search(idx + 1, currentSum + v);
-        if (bestScore === 0) return;
-      }
-    }
-
-    search(0, 0);
-
-    if (!bestCounts || bestScore > 500) {
-      function searchBroader(idx, currentSum) {
-        if (idx === 6) {
-          counts[6] = numEmpsToAssign - currentSum;
-          const sc = score(counts);
-          if (sc < bestScore) {
-            bestScore = sc;
-            bestCounts = [...counts];
-          }
-          return;
-        }
-        const remaining = numEmpsToAssign - currentSum;
-        for (let v = 0; v <= remaining; v++) {
-          counts[idx] = v;
-          searchBroader(idx + 1, currentSum + v);
-          if (bestScore === 0) return;
-        }
-      }
-      searchBroader(0, 0);
-    }
-
-    if (!bestCounts) {
-      bestCounts = Array(7).fill(0);
-      for (let i = 0; i < numEmpsToAssign; i++) {
-        bestCounts[i % 7]++;
-      }
-    }
-
-    return bestCounts;
-  },
 };
-
-/* ============================================
-   MODULE: Renderer
-   ============================================ */

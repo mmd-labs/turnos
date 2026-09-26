@@ -35,29 +35,17 @@ export const Storage = {
     return (config && config.demand) ? config.demand : null;
   },
   
-  saveDemandsByWeek(map) { this._save(STORAGE_KEYS.DEMANDS_BY_WEEK, map); },
-  loadDemandsByWeek() { return this._load(STORAGE_KEYS.DEMANDS_BY_WEEK) || {}; },
-  
   saveDemandForWeek(weekStr, demand) {
     if (!weekStr) return;
     this._save(`${STORAGE_KEYS.DEMAND_WEEK_PREFIX}${weekStr}`, demand);
-    const all = this.loadDemandsByWeek();
-    all[weekStr] = demand;
-    this.saveDemandsByWeek(all);
   },
   loadDemandForWeek(weekStr) {
     if (!weekStr) return null;
-    const specific = this._load(`${STORAGE_KEYS.DEMAND_WEEK_PREFIX}${weekStr}`);
-    if (specific) return specific;
-    const all = this.loadDemandsByWeek();
-    return all[weekStr] || null;
+    return this._load(`${STORAGE_KEYS.DEMAND_WEEK_PREFIX}${weekStr}`);
   },
   
   savePatterns(patterns) { this._save(STORAGE_KEYS.PATTERNS, patterns); },
   loadPatterns() { return this._load(STORAGE_KEYS.PATTERNS); },
-  
-  saveShiftModes(modes) { this._save(STORAGE_KEYS.SHIFT_MODES, modes); },
-  loadShiftModes() { return this._load(STORAGE_KEYS.SHIFT_MODES); },
   
   saveBaseWeek(weekStr) { this._save(STORAGE_KEYS.BASE_WEEK, weekStr); },
   loadBaseWeek() { return this._load(STORAGE_KEYS.BASE_WEEK); },

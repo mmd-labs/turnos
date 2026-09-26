@@ -9,21 +9,29 @@ test('Rechazo: demandas infactibles', () => {
     morning: [5, 5, 5, 5, 5, 5, 5],
     afternoon: [5, 5, 5, 5, 5, 5, 5]
   };
-  const r1 = Scheduler.generate(empNames, demand, { baseWeekStr: '2026-09-28', currentWeekStr: '2026-09-28', patterns: Array(8).fill(1), shiftModes: Array(8).fill('2M3T') });
+  const r1 = Scheduler.generate(empNames, demand, { weekStart: '2026-09-28', patternWeeks: Array(8).fill(1), shiftTargets: Array(8).fill({m: 2, t: 3, mode: '2M3T'}) });
   assert.strictEqual(r1.success, false);
 });
 
 test('Happy path: demanda factible, invariantes correctos', () => {
   const empNames = Array.from({length: 8}, (_, i) => `E${i}`);
   const demand = {
-    morning: [2, 2, 2, 2, 3, 3, 3],
-    afternoon: [2, 2, 2, 2, 3, 3, 3]
+    morning: [3, 3, 3, 3, 3, 3, 3],
+    afternoon: [3, 3, 2, 2, 3, 3, 3]
   };
   const r = Scheduler.generate(empNames, demand, { 
-    baseWeekStr: '2026-09-28', 
-    currentWeekStr: '2026-09-28', 
-    patterns: [6, 1, 2, 3, 4, 5, 3, 7], 
-    shiftModes: ['5M0T', '3M2T', '2M3T', '2M3T', '2M3T', '2M3T', '3M2T', '2M3T'] 
+    weekStart: '2026-09-28', 
+    patternWeeks: [6, 1, 2, 3, 4, 5, 3, 7], 
+    shiftTargets: [
+      {m: 5, t: 0, mode: '5M0T'}, 
+      {m: 3, t: 2, mode: '3M2T'}, 
+      {m: 2, t: 3, mode: '2M3T'}, 
+      {m: 2, t: 3, mode: '2M3T'}, 
+      {m: 2, t: 3, mode: '2M3T'}, 
+      {m: 2, t: 3, mode: '2M3T'}, 
+      {m: 3, t: 2, mode: '3M2T'}, 
+      {m: 2, t: 3, mode: '2M3T'}
+    ]
   });
   
   assert.strictEqual(r.success, true);

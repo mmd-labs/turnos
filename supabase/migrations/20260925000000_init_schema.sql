@@ -14,7 +14,7 @@ CREATE TABLE weekly_schedules (
 
 -- Row Level Security (RLS)
 ALTER TABLE user_config ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Users manage own config" ON user_config FOR ALL USING (auth.uid() = user_id);
+CREATE POLICY "Users manage own config" ON user_config FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
 ALTER TABLE weekly_schedules ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Users manage own schedules" ON weekly_schedules FOR ALL USING (auth.uid() = user_id);
+CREATE POLICY "Users manage own schedules" ON weekly_schedules FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);

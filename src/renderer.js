@@ -99,8 +99,7 @@ export const Renderer = {
   getEffectiveShiftMode(empIndex, weekStartStr) {
     if (empIndex === 0) return '5M0T';
     const baseWeek = Storage.loadBaseWeek() || (this.weekStartInput ? this.weekStartInput.value : '');
-    const savedModes = Storage.loadShiftModes() || DEFAULT_EMPLOYEE_SHIFT_MODES;
-    let baseMode = savedModes[empIndex] || DEFAULT_EMPLOYEE_SHIFT_MODES[empIndex] || ((empIndex % 2 === 1) ? '3M2T' : '2M3T');
+    let baseMode = DEFAULT_EMPLOYEE_SHIFT_MODES[empIndex] || ((empIndex % 2 === 1) ? '3M2T' : '2M3T');
     if (baseMode === '5M0T' && empIndex > 0) {
       baseMode = (empIndex % 2 === 1) ? '3M2T' : '2M3T';
     }
@@ -693,6 +692,3 @@ export const Renderer = {
   },
 };
 
-/* ============================================
-   MODULE: Exporter
-   ============================================ */

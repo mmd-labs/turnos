@@ -62,6 +62,15 @@ export const App = {
       if (e.key === 'Enter') handleLogin();
     });
 
+    const btnLoginOffline = document.getElementById('btn-login-offline');
+    if (btnLoginOffline) {
+      btnLoginOffline.addEventListener('click', () => {
+        if (authContainer.open) authContainer.close();
+        appWrapper.style.display = 'block';
+        this._enterApp();
+      });
+    }
+
     const btnLogout = document.getElementById('btn-logout');
     if (btnLogout) {
       btnLogout.addEventListener('click', async () => {
