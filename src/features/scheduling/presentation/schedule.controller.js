@@ -1,21 +1,41 @@
-import { Scheduler } from '../../../scheduler.js';
-import { Storage } from '../../../storage.js';
 import { Toast } from '../../../toast.js';
 import { Auditor } from '../../../auditor.js';
 import { Exporter, ShareHelper } from '../../../exporter.js';
-import { IndividualView } from '../../../individual.js';
-import { getMonday, formatDate, formatDateLong, normalizeToMonday } from '../../../core/date.js';
+import { individualController } from '../../individual/presentation/individual.controller.js';
+import { normalizeToMonday } from '../../../core/date.js';
 import { navigationService } from '../../../core/infrastructure/navigation.service.js';
+import { LocalScheduleRepository } from '../infrastructure/local-schedule.repository.js';
+import { LocalSettingsRepository } from '../../settings/infrastructure/local-settings.repository.js';
+import { GenerateSchedulesUseCase } from '../application/generate-schedules.usecase.js';
 
 export class ScheduleController {
   /**
    * @param {Object} params
    * @param {import('./schedule-view.js').ScheduleView} params.scheduleView
    * @param {import('../../settings/presentation/settings.controller.js').SettingsController} params.settingsController
+   * @param {import('../application/generate-schedules.usecase.js').GenerateSchedulesUseCase} [params.generateSchedulesUseCase]
+   * @param {import('../application/ports.js').ScheduleRepository} [params.scheduleRepo]
+   * @param {import('../../settings/application/ports.js').SettingsRepository} [params.settingsRepo]
+   * @param {import('../../individual/presentation/individual.controller.js').IndividualController} [params.individualCtrl]
    */
-  constructor({ scheduleView, settingsController }) {
+  constructor({
+    scheduleView,
+    settingsController,
+    scheduleRepo = new LocalScheduleRepository(),
+    settingsRepo = new LocalSettingsRepository(),
+    generateSchedulesUseCase = new GenerateSchedulesUseCase({
+      scheduleRepo,
+      demandRepo: settingsRepo,
+      settingsRepo,
+    }),
+    individualCtrl = individualController,
+  }) {
     this.scheduleView = scheduleView;
     this.settingsController = settingsController;
+    this.scheduleRepo = scheduleRepo;
+    this.settingsRepo = settingsRepo;
+    this.generateSchedulesUseCase = generateSchedulesUseCase;
+    this.individualController = individualCtrl;
   }
 
   init() {
@@ -41,11 +61,11 @@ export class ScheduleController {
     this.scheduleView.renderPDF(matrix, employees, weekStart);
 
     // Run Live Audit
-    const weekDemand = Storage.loadDemandForWeek(weekStart) || this.settingsController.getDemandForWeek(weekStart);
+    const weekDemand = this.settingsRepo.loadDemandForWeek(weekStart) || this.settingsController.getDemandForWeek(weekStart);
     Auditor.run(matrix, employees, weekDemand, weekStart);
 
     // Multi-week navigation pills
-    const genWeeks = Storage.loadGeneratedWeeks();
+    const genWeeks = this.scheduleRepo.loadGeneratedWeeks();
     if (genWeeks && genWeeks.length > 1) {
       this.settingsController.weekNavView.renderGeneratedWeeksNav(genWeeks, weekStart, (targetWeek) => {
         navigationService.navigateToWeek(targetWeek);
@@ -62,7 +82,7 @@ export class ScheduleController {
    * @param {string} _newShift
    */
   handleShiftChange(matrix, employees, weekStart, _empIdx, _dayIndex, _newShift) {
-    Storage.saveSchedule(weekStart, matrix);
+    this.scheduleRepo.save(weekStart, matrix);
     this.displaySchedule(matrix, employees, weekStart);
     Toast.show('Turno actualizado y balance recalculado.', 'info', 2000);
   }
@@ -82,63 +102,27 @@ export class ScheduleController {
 
     const employees = this.settingsController.getEmployeeNames();
     const weeksCount = this.settingsController.weekNavView.getWeeksCount();
-    Storage.saveWeeksCount(weeksCount);
 
     // Save active demand week before generating
     const activeDemandWeekStr = this.settingsController.getActiveDemandWeekStr();
     if (activeDemandWeekStr) {
-      Storage.saveDemandForWeek(activeDemandWeekStr, this.settingsController.demandView.getDemandConfig());
+      this.settingsRepo.saveDemandForWeek(activeDemandWeekStr, this.settingsController.demandView.getDemandConfig());
     }
 
-    if (!Storage.loadBaseWeek()) {
-      Storage.saveBaseWeek(startWeek);
+    // Delegate multi-week two-phase generation to Use Case
+    const result = this.generateSchedulesUseCase.execute({
+      startWeek,
+      weeksCount,
+      employees,
+      getDemandForWeek: (wStr) => this.settingsController.getDemandForWeek(wStr),
+    });
+
+    if (!result.success) {
+      Toast.show(result.error || 'Error al generar cuadrante.', 'error', 5000);
+      return;
     }
 
-    const generatedWeeks = [];
-    /** @type {string[][]|null} */
-    let firstWeekMatrix = null;
-    const weekPlans = [];
-
-    // Pass 1: Dry run (calculate and validate all weeks in memory)
-    for (let w = 0; w < weeksCount; w++) {
-      const monday = getMonday(startWeek);
-      monday.setDate(monday.getDate() + (w * 7));
-      const currentWeekStr = formatDate(monday);
-      const patternWeeks = this.settingsController.getEffectivePatternWeeks(currentWeekStr);
-      const shiftTargets = this.settingsController.getEffectiveShiftTargets(currentWeekStr);
-      const weekDemand = this.settingsController.getDemandForWeek(currentWeekStr);
-
-      const result = Scheduler.generate(employees, weekDemand, {
-        patternWeeks,
-        weekStart: currentWeekStr,
-        shiftTargets,
-      });
-
-      if (!result.success) {
-        Toast.show(`Error en semana ${w + 1} (${formatDateLong(currentWeekStr)}): ${result.error}`, 'error', 5000);
-        return;
-      }
-
-      weekPlans.push({
-        weekStr: currentWeekStr,
-        matrix: result.matrix,
-        demand: weekDemand,
-      });
-    }
-
-    // Pass 2: Commit (save only after all weeks have succeeded)
-    for (let w = 0; w < weekPlans.length; w++) {
-      const plan = weekPlans[w];
-      Storage.saveSchedule(plan.weekStr, plan.matrix);
-      Storage.saveDemandForWeek(plan.weekStr, plan.demand);
-      generatedWeeks.push(plan.weekStr);
-      if (w === 0) {
-        firstWeekMatrix = plan.matrix;
-      }
-    }
-
-    Storage.saveGeneratedWeeks(generatedWeeks);
-
+    const firstWeekMatrix = result.data?.firstWeekMatrix;
     if (firstWeekMatrix) {
       this.displaySchedule(firstWeekMatrix, employees, startWeek);
     }
@@ -166,8 +150,8 @@ export class ScheduleController {
         const editedMatrix = this.scheduleView.getScheduleFromDOM();
         const names = this.settingsController.getEmployeeNames();
         const weekStart = this.settingsController.weekNavView.getWeekStart();
-        Storage.saveSchedule(weekStart, editedMatrix);
-        Storage.saveNames(names);
+        this.scheduleRepo.save(weekStart, editedMatrix);
+        this.settingsRepo.saveNames(names);
         this.scheduleView.showConfig();
       });
     }
@@ -180,13 +164,13 @@ export class ScheduleController {
         const currentWeekStart = this.settingsController.weekNavView.getWeekStart();
         const weeksCount = this.settingsController.weekNavView.getWeeksCount();
 
-        const generatedWeeks = Storage.loadGeneratedWeeks() || [];
+        const generatedWeeks = this.scheduleRepo.loadGeneratedWeeks() || [];
 
         if (weeksCount > 1 && generatedWeeks.length > 1) {
           const weeksData = generatedWeeks.map(ws => {
             const matrix = (ws === currentWeekStart)
               ? this.scheduleView.getScheduleFromDOM()
-              : (Storage.loadSchedule(ws) || []);
+              : (this.scheduleRepo.load(ws) || []);
             return { matrix, employees: names, weekStart: ws };
           });
           this.scheduleView.renderMultiWeekPDF(weeksData);
@@ -228,7 +212,7 @@ export class ScheduleController {
         const matrix = this.scheduleView.getScheduleFromDOM();
         const names = this.settingsController.getEmployeeNames();
         const weekStart = this.settingsController.weekNavView.getWeekStart();
-        IndividualView.open(matrix, names, weekStart);
+        this.individualController.open(matrix, names, weekStart);
       });
     }
   }

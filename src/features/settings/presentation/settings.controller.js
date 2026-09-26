@@ -22,8 +22,9 @@ import {
   calculateBasePattern,
 } from '../../scheduling/domain/patterns.js';
 import { Toast } from '../../../toast.js';
-import { Storage } from '../../../storage.js';
 import { navigationService } from '../../../core/infrastructure/navigation.service.js';
+import { LocalSettingsRepository } from '../infrastructure/local-settings.repository.js';
+import { LocalScheduleRepository } from '../../scheduling/infrastructure/local-schedule.repository.js';
 
 export class SettingsController {
   /**
@@ -32,6 +33,8 @@ export class SettingsController {
    * @param {import('./demand-view.js').DemandView} params.demandView
    * @param {import('./week-nav-view.js').WeekNavView} params.weekNavView
    * @param {import('../../scheduling/presentation/schedule-view.js').ScheduleView} params.scheduleView
+   * @param {import('../application/ports.js').SettingsRepository} [params.settingsRepo]
+   * @param {import('../../scheduling/application/ports.js').ScheduleRepository} [params.scheduleRepo]
    * @param {(matrix: string[][], employees: string[], weekStart: string) => void} [params.onDisplaySchedule]
    */
   constructor({
@@ -39,12 +42,16 @@ export class SettingsController {
     demandView,
     weekNavView,
     scheduleView,
+    settingsRepo = new LocalSettingsRepository(),
+    scheduleRepo = new LocalScheduleRepository(),
     onDisplaySchedule = undefined,
   }) {
     this.employeeNamesView = employeeNamesView;
     this.demandView = demandView;
     this.weekNavView = weekNavView;
     this.scheduleView = scheduleView;
+    this.settingsRepo = settingsRepo;
+    this.scheduleRepo = scheduleRepo;
     this.onDisplaySchedule = onDisplaySchedule;
 
     this.state = {
@@ -65,17 +72,17 @@ export class SettingsController {
   }
 
   loadSavedState() {
-    const names = Storage.loadNames();
+    const names = this.settingsRepo.loadNames();
     const isOldGeneric = Array.isArray(names) && names.every((n, i) => n === `Empleado ${i + 1}`);
     if (Array.isArray(names) && names.length > 0 && !isOldGeneric) {
       this.state.employeeNames = names;
     } else {
       this.state.employeeNames = [...DEFAULT_EMPLOYEE_NAMES];
-      Storage.saveNames(this.state.employeeNames);
+      this.settingsRepo.saveNames(this.state.employeeNames);
     }
-    const config = Storage.loadConfig();
+    const config = this.settingsRepo.loadConfig();
     if (config) {
-      this.state.weekStart = config.weekStart;
+      this.state.weekStart = config.weekStart || '';
     }
   }
 
@@ -88,9 +95,9 @@ export class SettingsController {
     }
 
     const currentWeekStart = this.weekNavView.getWeekStart();
-    const baseWeek = Storage.loadBaseWeek() || currentWeekStart;
-    const savedPatterns = Storage.loadPatterns();
-    const savedShiftModes = Storage.loadConfig()?.shiftModes;
+    const baseWeek = this.settingsRepo.loadBaseWeek() || currentWeekStart;
+    const savedPatterns = this.settingsRepo.loadPatterns();
+    const savedShiftModes = this.settingsRepo.loadConfig()?.shiftModes || null;
 
     this.employeeNamesView.render({
       count: this.state.employeeNames.length || DEFAULT_EMPLOYEES,
@@ -106,9 +113,11 @@ export class SettingsController {
       },
     });
 
-    const config = Storage.loadConfig();
+    const config = this.settingsRepo.loadConfig();
     if (config) {
-      this.demandView.loadDemandConfig(config.demand);
+      if (config.demand) {
+        this.demandView.loadDemandConfig(config.demand);
+      }
       const employeeCountInput = /** @type {HTMLInputElement|null} */ (document.getElementById('employee-count'));
       if (config.employeeCount && employeeCountInput) {
         employeeCountInput.value = String(config.employeeCount);
@@ -125,7 +134,7 @@ export class SettingsController {
       }
     }
 
-    const savedWeeksCount = Storage.loadWeeksCount();
+    const savedWeeksCount = this.settingsRepo.loadWeeksCount();
     if (savedWeeksCount) {
       this.weekNavView.setWeeksCount(savedWeeksCount);
     }
@@ -137,7 +146,7 @@ export class SettingsController {
   saveState() {
     const names = this.getEmployeeNames();
     this.state.employeeNames = names;
-    Storage.saveNames(names);
+    this.settingsRepo.saveNames(names);
 
     const demand = this.demandView.getDemandConfig();
     const employeeCountInput = /** @type {HTMLInputElement|null} */ (document.getElementById('employee-count'));
@@ -150,11 +159,11 @@ export class SettingsController {
       demand,
     };
     this.state.weekStart = weekStart;
-    Storage.saveConfig(config);
+    this.settingsRepo.saveConfig(config);
 
     const activeDemandWeekStr = this.getActiveDemandWeekStr();
     if (activeDemandWeekStr) {
-      Storage.saveDemandForWeek(activeDemandWeekStr, demand);
+      this.settingsRepo.saveDemandForWeek(activeDemandWeekStr, demand);
     }
   }
 
@@ -181,9 +190,9 @@ export class SettingsController {
     if (this.demandView.activeDemandWeekStr === weekStr) {
       return this.demandView.getDemandConfig();
     }
-    const saved = Storage.loadDemandForWeek(weekStr);
+    const saved = this.settingsRepo.loadDemandForWeek(weekStr);
     if (saved) return saved;
-    const baseDemand = Storage.loadDemand();
+    const baseDemand = this.settingsRepo.loadDemand();
     if (baseDemand) return baseDemand;
     return this.demandView.getDemandConfig();
   }
@@ -195,8 +204,8 @@ export class SettingsController {
   getEffectivePatternWeeks(weekStartStr) {
     const employeeCountInput = /** @type {HTMLInputElement|null} */ (document.getElementById('employee-count'));
     const count = parseInt(employeeCountInput ? employeeCountInput.value : String(DEFAULT_EMPLOYEES)) || DEFAULT_EMPLOYEES;
-    const baseWeek = Storage.loadBaseWeek() || this.weekNavView.getWeekStart();
-    const savedPatterns = Storage.loadPatterns();
+    const baseWeek = this.settingsRepo.loadBaseWeek() || this.weekNavView.getWeekStart();
+    const savedPatterns = this.settingsRepo.loadPatterns();
     return getEffectivePatternWeeks({ count, baseWeek, targetWeek: weekStartStr, savedPatterns });
   }
 
@@ -206,8 +215,8 @@ export class SettingsController {
    * @returns {number}
    */
   getEffectivePatternWeek(empIndex, weekStartStr) {
-    const baseWeek = Storage.loadBaseWeek() || this.weekNavView.getWeekStart();
-    const savedPatterns = Storage.loadPatterns();
+    const baseWeek = this.settingsRepo.loadBaseWeek() || this.weekNavView.getWeekStart();
+    const savedPatterns = this.settingsRepo.loadPatterns();
     return getEffectivePatternWeek({ empIndex, baseWeek, targetWeek: weekStartStr, savedPatterns });
   }
 
@@ -217,8 +226,8 @@ export class SettingsController {
    * @returns {string}
    */
   getEffectiveShiftMode(empIndex, weekStartStr) {
-    const baseWeek = Storage.loadBaseWeek() || this.weekNavView.getWeekStart();
-    const savedShiftModes = Storage.loadConfig()?.shiftModes;
+    const baseWeek = this.settingsRepo.loadBaseWeek() || this.weekNavView.getWeekStart();
+    const savedShiftModes = this.settingsRepo.loadConfig()?.shiftModes;
     const baseMode = (savedShiftModes && savedShiftModes[empIndex]) || DEFAULT_EMPLOYEE_SHIFT_MODES[empIndex];
     const diffWeeks = (baseWeek && weekStartStr) ? getWeeksDiff(baseWeek, weekStartStr) : 0;
     return calculateEffectiveShiftMode(empIndex, baseMode, diffWeeks);
@@ -231,8 +240,8 @@ export class SettingsController {
   getEffectiveShiftTargets(weekStartStr) {
     const employeeCountInput = /** @type {HTMLInputElement|null} */ (document.getElementById('employee-count'));
     const count = parseInt(employeeCountInput ? employeeCountInput.value : String(DEFAULT_EMPLOYEES)) || DEFAULT_EMPLOYEES;
-    const baseWeek = Storage.loadBaseWeek() || this.weekNavView.getWeekStart();
-    const savedShiftModes = Storage.loadConfig()?.shiftModes;
+    const baseWeek = this.settingsRepo.loadBaseWeek() || this.weekNavView.getWeekStart();
+    const savedShiftModes = this.settingsRepo.loadConfig()?.shiftModes;
     return getEffectiveShiftTargets({ count, baseWeek, targetWeek: weekStartStr, savedShiftModes });
   }
 
@@ -242,18 +251,18 @@ export class SettingsController {
    * @param {string} weekStartStr
    */
   setEmployeePatternForWeek(empIndex, effectiveWeek, weekStartStr) {
-    const baseWeek = Storage.loadBaseWeek() || weekStartStr || this.weekNavView.getWeekStart();
-    if (!Storage.loadBaseWeek() && baseWeek) {
-      Storage.saveBaseWeek(baseWeek);
+    const baseWeek = this.settingsRepo.loadBaseWeek() || weekStartStr || this.weekNavView.getWeekStart();
+    if (!this.settingsRepo.loadBaseWeek() && baseWeek) {
+      this.settingsRepo.saveBaseWeek(baseWeek);
     }
-    const currentPatterns = Storage.loadPatterns() || [...DEFAULT_EMPLOYEE_PATTERNS];
+    const currentPatterns = this.settingsRepo.loadPatterns() || [...DEFAULT_EMPLOYEE_PATTERNS];
     while (currentPatterns.length <= empIndex) {
       currentPatterns.push(((currentPatterns.length % 7) + 1));
     }
     const diffWeeks = getWeeksDiff(baseWeek, weekStartStr);
     const newBasePattern = calculateBasePattern(effectiveWeek, diffWeeks);
     currentPatterns[empIndex] = newBasePattern;
-    Storage.savePatterns(currentPatterns);
+    this.settingsRepo.savePatterns(currentPatterns);
   }
 
   renderDemandWeeksNav() {
@@ -266,14 +275,14 @@ export class SettingsController {
       onSelectWeek: ({ targetIndex, targetWeek }) => {
         // 1. Guardar demanda de la semana actual antes de cambiar
         if (this.demandView.activeDemandWeekStr) {
-          Storage.saveDemandForWeek(this.demandView.activeDemandWeekStr, this.demandView.getDemandConfig());
+          this.settingsRepo.saveDemandForWeek(this.demandView.activeDemandWeekStr, this.demandView.getDemandConfig());
         }
 
         // 2. Cambiar a la nueva semana y actualizar pills
         this.demandView.updateActivePill(targetIndex, targetWeek);
 
         // 3. Cargar demanda de la semana seleccionada
-        const targetDemand = Storage.loadDemandForWeek(targetWeek) || this.demandView.getDemandConfig();
+        const targetDemand = this.settingsRepo.loadDemandForWeek(targetWeek) || this.demandView.getDemandConfig();
         this.demandView.loadDemandConfig(targetDemand);
       },
     });
@@ -281,9 +290,9 @@ export class SettingsController {
 
   updatePatternSelects() {
     const weekStart = this.weekNavView.getWeekStart();
-    const baseWeek = Storage.loadBaseWeek() || weekStart;
-    const savedPatterns = Storage.loadPatterns();
-    const savedShiftModes = Storage.loadConfig()?.shiftModes;
+    const baseWeek = this.settingsRepo.loadBaseWeek() || weekStart;
+    const savedPatterns = this.settingsRepo.loadPatterns();
+    const savedShiftModes = this.settingsRepo.loadConfig()?.shiftModes;
 
     this.employeeNamesView.updatePatternSelects({ weekStart, baseWeek, savedPatterns });
     this.employeeNamesView.updateShiftBadges({ weekStart, baseWeek, savedShiftModes });
@@ -301,7 +310,7 @@ export class SettingsController {
     this.weekNavView.updateWeekBadge(normalized);
     this.updatePatternSelects();
 
-    const saved = Storage.loadSchedule(normalized);
+    const saved = this.scheduleRepo.load(normalized);
     const names = this.getEmployeeNames();
 
     if (saved && saved.length === names.length) {
@@ -317,7 +326,7 @@ export class SettingsController {
       }
     }
 
-    const generatedWeeks = Storage.loadGeneratedWeeks();
+    const generatedWeeks = this.scheduleRepo.loadGeneratedWeeks() || [];
     this.weekNavView.renderGeneratedWeeksNav(generatedWeeks, normalized, (targetWeek) => {
       navigationService.navigateToWeek(targetWeek);
     });
@@ -329,6 +338,7 @@ export class SettingsController {
   navigateWeek(deltaDays) {
     const currentVal = this.weekNavView.getWeekStart();
     let base = getMonday(currentVal || new Date());
+    if (!base) return;
     base.setDate(base.getDate() + deltaDays);
     const newWeekStr = formatDate(base);
     this.navigateToWeek(newWeekStr);
@@ -346,9 +356,9 @@ export class SettingsController {
         employeeCountInput.value = String(count);
 
         const currentWeekStart = this.weekNavView.getWeekStart();
-        const baseWeek = Storage.loadBaseWeek() || currentWeekStart;
-        const savedPatterns = Storage.loadPatterns();
-        const savedShiftModes = Storage.loadConfig()?.shiftModes;
+        const baseWeek = this.settingsRepo.loadBaseWeek() || currentWeekStart;
+        const savedPatterns = this.settingsRepo.loadPatterns();
+        const savedShiftModes = this.settingsRepo.loadConfig()?.shiftModes;
 
         this.employeeNamesView.render({
           count,
@@ -388,7 +398,7 @@ export class SettingsController {
         }
         const activeWeekStr = this.getActiveDemandWeekStr();
         if (activeWeekStr) {
-          Storage.saveDemandForWeek(activeWeekStr, this.demandView.getDemandConfig());
+          this.settingsRepo.saveDemandForWeek(activeWeekStr, this.demandView.getDemandConfig());
         }
         this.saveState();
       });
@@ -416,7 +426,7 @@ export class SettingsController {
     const weeksCountSelect = this.weekNavView.weeksCountSelect;
     if (weeksCountSelect) {
       weeksCountSelect.addEventListener('change', () => {
-        Storage.saveWeeksCount(weeksCountSelect.value);
+        this.settingsRepo.saveWeeksCount(Number(weeksCountSelect.value));
         this.renderDemandWeeksNav();
       });
     }
@@ -432,11 +442,12 @@ export class SettingsController {
 
         for (let w = 0; w < wc; w++) {
           const monday = getMonday(startWeek);
+          if (!monday) continue;
           monday.setDate(monday.getDate() + (w * 7));
           const weekStr = formatDate(monday);
-          Storage.saveDemandForWeek(weekStr, JSON.parse(JSON.stringify(currentDemand)));
+          this.settingsRepo.saveDemandForWeek(weekStr, JSON.parse(JSON.stringify(currentDemand)));
         }
-        Storage.saveDemand(currentDemand);
+        this.settingsRepo.saveDemand(currentDemand);
         Toast.show(`Demanda de la Semana ${this.demandView.activeDemandWeekIndex + 1} copiada a las ${wc} semanas.`, 'success', 3500);
       });
     }

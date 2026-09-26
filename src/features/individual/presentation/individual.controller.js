@@ -9,17 +9,19 @@ import {
 } from '../../scheduling/domain/patterns.js';
 import { buildIndividualShareText } from '../../export/domain/share-text.js';
 import { navigatorShareAdapter } from '../../export/infrastructure/navigator-share.adapter.js';
-import { Storage } from '../../../storage.js';
 import { Toast } from '../../../toast.js';
 import { individualViewPresentation } from './individual-view.js';
+import { LocalSettingsRepository } from '../../settings/infrastructure/local-settings.repository.js';
 
 export class IndividualController {
   /**
    * @param {Object} [params]
    * @param {import('./individual-view.js').IndividualViewPresentation} [params.view]
+   * @param {import('../../settings/application/ports.js').SettingsRepository} [params.settingsRepo]
    */
-  constructor({ view = individualViewPresentation } = {}) {
+  constructor({ view = individualViewPresentation, settingsRepo = new LocalSettingsRepository() } = {}) {
     this.view = view;
+    this.settingsRepo = settingsRepo;
     /** @type {string[][]|null} */
     this.matrix = null;
     /** @type {string[]|null} */
@@ -83,8 +85,8 @@ export class IndividualController {
     const empIdx = this.view.getSelectedEmpIndex();
     const empName = this.employees[empIdx] || `Empleado ${empIdx + 1}`;
 
-    const baseWeek = Storage.loadBaseWeek() || this.weekStart;
-    const savedPatterns = Storage.loadPatterns();
+    const baseWeek = this.settingsRepo.loadBaseWeek() || this.weekStart;
+    const savedPatterns = this.settingsRepo.loadPatterns();
     const pWeek = getEffectivePatternWeek({
       empIndex: empIdx,
       baseWeek,
@@ -93,7 +95,7 @@ export class IndividualController {
     });
     const pItem = ROTATING_OFF_PATTERN[pWeek - 1] || ROTATING_OFF_PATTERN[0];
 
-    const savedShiftModes = Storage.loadConfig()?.shiftModes;
+    const savedShiftModes = this.settingsRepo.loadShiftModes();
     const baseMode = (savedShiftModes && savedShiftModes[empIdx]) || DEFAULT_EMPLOYEE_SHIFT_MODES[empIdx] || '3M2T';
     const diffWeeks = (baseWeek && this.weekStart) ? getWeeksDiff(baseWeek, this.weekStart) : 0;
     const shiftMode = calculateEffectiveShiftMode(empIdx, baseMode, diffWeeks);
