@@ -9,8 +9,6 @@ import {
   DEFAULT_EMPLOYEES,
   DEFAULT_EMPLOYEE_PATTERNS,
   DEFAULT_EMPLOYEE_SHIFT_MODES,
-  CYCLE_8,
-  DEFAULT_CYCLE_POSITIONS,
 } from './constants.js';
 import { Storage } from './storage.js';
 import { Toast } from './toast.js';
@@ -59,17 +57,12 @@ export const Renderer = {
   getEffectivePatternWeek(empIndex, weekStartStr) {
     const baseWeek = Storage.loadBaseWeek() || (this.weekStartInput ? this.weekStartInput.value : '');
     const savedPatterns = Storage.loadPatterns();
-    if (savedPatterns && savedPatterns[empIndex] !== undefined) {
-      const basePattern = savedPatterns[empIndex] || ((empIndex % 7) + 1);
-      if (!baseWeek || !weekStartStr) return basePattern;
-      const diffWeeks = this._getWeeksDiff(baseWeek, weekStartStr);
-      return (((basePattern - 1 + diffWeeks) % 7) + 7) % 7 + 1;
-    }
-    const initialPos = DEFAULT_CYCLE_POSITIONS[empIndex] !== undefined ? DEFAULT_CYCLE_POSITIONS[empIndex] : (empIndex % 8);
-    if (!baseWeek || !weekStartStr) return CYCLE_8[initialPos];
+    const basePattern = (savedPatterns && savedPatterns[empIndex] !== undefined)
+      ? savedPatterns[empIndex]
+      : (DEFAULT_EMPLOYEE_PATTERNS[empIndex] ?? ((empIndex % 7) + 1));
+    if (!baseWeek || !weekStartStr) return basePattern;
     const diffWeeks = this._getWeeksDiff(baseWeek, weekStartStr);
-    const pos = (((initialPos + diffWeeks) % 8) + 8) % 8;
-    return CYCLE_8[pos];
+    return (((basePattern - 1 + diffWeeks) % 7) + 7) % 7 + 1;
   },
 
   getEffectivePatternWeeks(weekStartStr) {

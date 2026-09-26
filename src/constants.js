@@ -35,8 +35,6 @@ export const ROTATING_OFF_PATTERN = [
 
 export const DEFAULT_EMPLOYEE_PATTERNS = [ 6, 1, 2, 3, 4, 5, 3, 7 ];
 
-export const CYCLE_8 = [1, 2, 3, 3, 4, 5, 6, 7];
-export const DEFAULT_CYCLE_POSITIONS = [6, 0, 1, 2, 4, 5, 3, 7];
 
 export const DEFAULT_EMPLOYEE_SHIFT_MODES = [
   '5M0T', '3M2T', '2M3T', '2M3T', '2M3T', '2M3T', '3M2T', '2M3T',
