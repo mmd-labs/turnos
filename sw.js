@@ -1,4 +1,4 @@
-const CACHE_NAME = 'turnos-app-v10';
+const CACHE_NAME = 'turnos-app-v11';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -11,6 +11,14 @@ const ASSETS_TO_CACHE = [
   './src/core/infrastructure/local-storage.store.js',
   './src/core/infrastructure/memory.store.js',
   './src/core/infrastructure/persistence-notifier.js',
+  './src/core/infrastructure/navigation.service.js',
+  './src/features/auth/infrastructure/config.js',
+  './src/features/auth/application/ports.js',
+  './src/features/auth/infrastructure/supabase-auth.adapter.js',
+  './src/features/auth/presentation/auth.controller.js',
+  './src/features/sync/application/ports.js',
+  './src/features/sync/infrastructure/supabase-sync.adapter.js',
+  './src/features/sync/infrastructure/null-sync.adapter.js',
   './src/features/settings/application/ports.js',
   './src/features/settings/infrastructure/local-settings.repository.js',
   './src/features/scheduling/domain/entities.js',

@@ -11,6 +11,11 @@ import { SyncManager } from './sync.js';
 import { DEFAULT_EMPLOYEES, DEFAULT_EMPLOYEE_NAMES, MIN_EMPLOYEES } from './constants.js';
 import { clampDemandValue, getMinStaffForDay } from './features/scheduling/domain/rules/demand.js';
 import { persistenceNotifier } from './core/infrastructure/persistence-notifier.js';
+import { navigationService } from './core/infrastructure/navigation.service.js';
+import { AuthController } from './features/auth/presentation/auth.controller.js';
+import { SupabaseAuthAdapter } from './features/auth/infrastructure/supabase-auth.adapter.js';
+import { SupabaseSyncAdapter } from './features/sync/infrastructure/supabase-sync.adapter.js';
+
 
 
 
@@ -22,6 +27,7 @@ export const App = {
 
   async init() {
     persistenceNotifier.subscribe(() => SyncManager.onLocalChange());
+    navigationService.onNavigate((weekStr) => this.navigateToWeek(weekStr));
     this._setupAuth();
     Toast.init();
     Theme.init();
@@ -33,67 +39,15 @@ export const App = {
   },
 
   async _setupAuth() {
-    const authContainer = document.getElementById('auth-container');
-    const appWrapper = document.getElementById('app-wrapper');
-    const btnLogin = document.getElementById('btn-login');
-    const usernameInput = document.getElementById('auth-username');
-    const passwordInput = document.getElementById('auth-password');
-    const errorEl = document.getElementById('auth-error');
-
-    const FAKE_DOMAIN = '@turnos-internal.com';
-
-    const handleLogin = async () => {
-      const username = usernameInput.value.trim();
-      const password = passwordInput.value;
-      if (!username || !password) return;
-
-      btnLogin.textContent = 'Ingresando...';
-      btnLogin.disabled = true;
-      errorEl.style.display = 'none';
-
-      const email = `${username}${FAKE_DOMAIN}`;
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      
-      if (error) {
-        errorEl.textContent = 'Credenciales inválidas';
-        errorEl.style.display = 'block';
-        btnLogin.textContent = 'Ingresar';
-        btnLogin.disabled = false;
-      }
-    };
-
-    btnLogin.addEventListener('click', handleLogin);
-    passwordInput.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') handleLogin();
+    const authPort = new SupabaseAuthAdapter();
+    const syncPort = new SupabaseSyncAdapter();
+    const authController = new AuthController({
+      authPort,
+      syncPort,
+      onLoginSuccess: () => this._enterApp(),
+      onLogout: () => {}
     });
-
-    const btnLoginOffline = document.getElementById('btn-login-offline');
-    if (btnLoginOffline) {
-      btnLoginOffline.addEventListener('click', () => {
-        if (authContainer.open) authContainer.close();
-        appWrapper.style.display = 'block';
-        this._enterApp();
-      });
-    }
-
-    const btnLogout = document.getElementById('btn-logout');
-    if (btnLogout) {
-      btnLogout.addEventListener('click', async () => {
-        await supabase.auth.signOut();
-      });
-    }
-
-    supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session) {
-        if (authContainer.open) authContainer.close();
-        appWrapper.style.display = 'block';
-        await SyncManager.pull(); // Traer datos de Supabase antes de pintar
-        this._enterApp();
-      } else {
-        appWrapper.style.display = 'none';
-        if (!authContainer.open) authContainer.showModal();
-      }
-    });
+    authController.init();
   },
 
   _registerServiceWorker() {

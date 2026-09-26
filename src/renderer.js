@@ -30,6 +30,8 @@ import {
   calculateEffectiveShiftMode,
   calculateBasePattern,
 } from './features/scheduling/domain/patterns.js';
+import { navigationService } from './core/infrastructure/navigation.service.js';
+
 
 
 export const Renderer = {
@@ -127,9 +129,7 @@ export const Renderer = {
     nav.querySelectorAll('.week-pill').forEach(btn => {
       btn.addEventListener('click', () => {
         const week = btn.dataset.week;
-        if (window.App && window.App.navigateToWeek) {
-          window.App.navigateToWeek(week);
-        }
+        navigationService.navigateToWeek(week);
       });
     });
   },
