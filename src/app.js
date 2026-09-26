@@ -10,6 +10,8 @@ import { supabase } from './supabase.js';
 import { SyncManager } from './sync.js';
 import { DEFAULT_EMPLOYEES, DEFAULT_EMPLOYEE_NAMES, MIN_EMPLOYEES } from './constants.js';
 import { clampDemandValue, getMinStaffForDay } from './features/scheduling/domain/rules/demand.js';
+import { persistenceNotifier } from './core/infrastructure/persistence-notifier.js';
+
 
 
 export const App = {
@@ -19,6 +21,7 @@ export const App = {
   },
 
   async init() {
+    persistenceNotifier.subscribe(() => SyncManager.onLocalChange());
     this._setupAuth();
     Toast.init();
     Theme.init();
